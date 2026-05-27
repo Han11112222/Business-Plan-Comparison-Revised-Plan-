@@ -12,7 +12,7 @@ from sklearn.pipeline import make_pipeline
 # ─────────────────────────────────────────────────────────
 # 🟢 1. 기본 설정
 # ─────────────────────────────────────────────────────────
-st.set_page_config(page_title="도시가스 통합 분석", layout="wide")
+st.set_page_config(page_title="도시가스 공급량 통합 분석", layout="wide")
 
 def set_korean_font():
     try:
@@ -26,16 +26,6 @@ set_korean_font()
 # ─────────────────────────────────────────────────────────
 # 🟢 2. 용도별 매핑 및 정렬 순서
 # ─────────────────────────────────────────────────────────
-
-MAPPING_SALES = {
-    "취사용": "가정용", "개별난방용": "가정용", "중앙난방용": "가정용", "자가열전용": "가정용",
-    "개별난방": "가정용", "중앙난방": "가정용", "가정용소계": "가정용",
-    "일반용": "영업용", "업무난방용": "업무용", "냉방용": "업무용", "주한미군": "업무용",
-    "산업용": "산업용", "수송용(CNG)": "수송용", "수송용(BIO)": "수송용",
-    "열병합용": "열병합", "열병합용1": "열병합", "열병합용2": "열병합",
-    "연료전지용": "연료전지", "연료전지": "연료전지",
-    "열전용설비용": "열전용설비용"
-}
 
 MAPPING_SUPPLY_SPECIFIC = {
     "취사용": "가정용", "개별난방용": "가정용", "중앙난방용": "가정용", 
@@ -148,7 +138,7 @@ def clean_df(df):
         
     return df
 
-def make_long_data(df, label, mode='sales'):
+def make_long_data(df, label, mode='supply'):
     df = clean_df(df)
     if df.empty or '연' not in df.columns: return pd.DataFrame()
     
@@ -171,9 +161,6 @@ def make_long_data(df, label, mode='sales'):
         if mode == 'detail':
             group = MAPPING_DETAIL.get(col)
             if not group: group = col 
-        elif mode == 'sales':
-            group = MAPPING_SALES.get(col)
-            if not group: continue 
         else: # supply
             if df[col].dtype == object: continue
             group = MAPPING_SUPPLY_SPECIFIC.get(col, col)
@@ -191,7 +178,7 @@ def make_long_data(df, label, mode='sales'):
     return pd.concat(records, ignore_index=True)
 
 # ─────────────────────────────────────────────────────────
-# 🟢 4. 분석 화면 (기존)
+# 🟢 4. 분석 화면
 # ─────────────────────────────────────────────────────────
 def render_analysis_dashboard(long_df, unit_label):
     st.subheader(f"📊 실적 분석 ({unit_label})")
@@ -229,7 +216,7 @@ def render_analysis_dashboard(long_df, unit_label):
     st.dataframe(piv.style.format("{:,.0f}"), use_container_width=True)
 
 # ─────────────────────────────────────────────────────────
-# 🟢 5. 예측 화면 및 기타 기능 (생략 없이 원본 유지)
+# 🟢 5. 예측 화면
 # ─────────────────────────────────────────────────────────
 def generate_trend_insight(hist_df, pred_df):
     if hist_df.empty or pred_df.empty: return ""
@@ -401,17 +388,15 @@ def render_final_check(long_df, unit_label):
         st.dataframe(piv.style.format("{:,.0f}"), use_container_width=True)
 
 # ─────────────────────────────────────────────────────────
-# 🟢 6. 사업계획 비교 (신규 기능 추가)
+# 🟢 6. 사업계획 비교
 # ─────────────────────────────────────────────────────────
 def render_plan_comparison(df_act, df_plan, df_action, unit_label):
     st.subheader(f"📊 2026 사업계획 비교 및 10개년 추이 ({unit_label})")
     
-    # 데이터를 각각 Long form으로 변환
     long_act = make_long_data(df_act, "실적", 'supply')
     long_plan = make_long_data(df_plan, "기존 사업계획", 'supply')
     long_action = make_long_data(df_action, "실천사업계획", 'supply')
     
-    # 단위 변환 (GJ)
     if "GJ" in unit_label:
         if not long_act.empty: long_act['값'] /= 1000
         if not long_plan.empty: long_plan['값'] /= 1000
@@ -421,7 +406,6 @@ def render_plan_comparison(df_act, df_plan, df_action, unit_label):
     st.markdown("#### 1️⃣ 2026년 기존 사업계획 vs 실천사업계획 비교")
     
     comp_data = []
-    
     if not long_plan.empty:
         plan_2026 = long_plan[long_plan['연'] == 2026].groupby('그룹')['값'].sum().reset_index()
         plan_2026['구분'] = '기존 사업계획'
@@ -436,22 +420,16 @@ def render_plan_comparison(df_act, df_plan, df_action, unit_label):
         st.warning("비교할 2026년 데이터가 부족합니다.")
     else:
         comp_df = pd.concat(comp_data, ignore_index=True)
-        
-        # 묶은 막대 그래프
         fig_comp = px.bar(comp_df, x='그룹', y='값', color='구분', barmode='group', text_auto='.2s',
                           title="2026년 용도별 사업계획 비교")
         st.plotly_chart(fig_comp, use_container_width=True)
         
-        # 피벗 테이블 생성
         piv_2026 = comp_df.pivot_table(index='그룹', columns='구분', values='값', aggfunc='sum').fillna(0)
-        
         if '기존 사업계획' in piv_2026.columns and '실천사업계획' in piv_2026.columns:
             piv_2026['차이(실천-기존)'] = piv_2026['실천사업계획'] - piv_2026['기존 사업계획']
             
-        # 열 순서 정렬
         ordered_cols = [c for c in ['기존 사업계획', '실천사업계획', '차이(실천-기존)'] if c in piv_2026.columns]
         piv_2026 = piv_2026[ordered_cols]
-        
         st.dataframe(piv_2026.style.format("{:,.0f}"), use_container_width=True)
 
     st.markdown("---")
@@ -473,135 +451,94 @@ def render_plan_comparison(df_act, df_plan, df_action, unit_label):
         trend_df = pd.concat(trend_data, ignore_index=True)
         trend_grp = trend_df.groupby(['연', '그룹'])['값'].sum().reset_index()
         
-        # 누적 막대 그래프
         fig_trend = px.bar(trend_grp, x='연', y='값', color='그룹', text_auto='.2s',
                            title="용도별 공급량 10개년 추이 (2017~2026)")
         fig_trend.update_xaxes(dtick=1, tickformat="d")
         st.plotly_chart(fig_trend, use_container_width=True)
         
-        # 데이터 표
         piv_trend = trend_grp.pivot_table(index='연', columns='그룹', values='값', aggfunc='sum').fillna(0)
         piv_trend['총합계'] = piv_trend.sum(axis=1)
         st.dataframe(piv_trend.style.format("{:,.0f}"), use_container_width=True)
 
 # ─────────────────────────────────────────────────────────
-# 🟢 7. 메인 실행
+# 🟢 7. 메인 실행 (수정: 사이드바 및 공급량 전용으로 개편)
 # ─────────────────────────────────────────────────────────
 def main():
-    st.title("🔥 도시가스 판매/공급 통합 분석")
+    st.title("🔥 도시가스 공급량 통합 분석 대시보드")
     
     with st.sidebar:
-        st.header("설정")
-        mode = st.radio("분석 모드", ["1. 판매량", "2. 공급량"], index=1)
+        st.header("⚙️ 분석 설정")
         
-        sub_mode = ""
-        if mode.startswith("2"):
-            # 🟢 [수정됨] 5) 사업계획 비교 옵션 추가
-            sub_mode = st.radio("기능 선택", ["1) 실적분석", "2) 2035 예측", "3) 상품별 예측", "4) 최종값 확인", "5) 사업계획 비교"])
-        elif mode.startswith("1"):
-            sub_mode = st.radio("기능 선택", ["1) 실적분석"])
+        # 판매량 모드 삭제, 공급량 기능만 선택하도록 직관성 개선
+        sub_mode = st.radio("기능 선택", ["1) 실적분석", "2) 2035 예측", "3) 상품별 예측", "4) 최종값 확인", "5) 사업계획 비교"])
         
-        idx = 0 
-        if mode.startswith("1"): idx = 0 
-        
-        unit_opts = ["열량 (GJ)", "부피 (천m³)"]
-        unit = st.radio("단위 선택", unit_opts, index=idx)
-        unit_key = "열량" if "열량" in unit else "부피"
+        unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
         
         st.markdown("---")
-        st.subheader("파일 업로드")
+        st.subheader("📂 파일 업로드")
         
-        up_sales = st.file_uploader("1. 판매량(계획_실적).xlsx", type=["xlsx", "csv"], key="s", accept_multiple_files=True)
-        up_supply = st.file_uploader("2. 공급량실적_계획_실적_MJ.xlsx", type=["xlsx", "csv"], key="p")
-        up_final = st.file_uploader("3. 최종값.xlsx (결과파일)", type=["xlsx", "csv"], key="f")
+        # 판매량 파일 삭제, 공급량 관련 파일만 유지
+        up_supply = st.file_uploader("1. 공급량 데이터 (실적/계획/실천)", type=["xlsx", "csv"], key="p")
+        up_final = st.file_uploader("2. 최종값 결과파일", type=["xlsx", "csv"], key="f")
         st.markdown("---")
     
     df_final = pd.DataFrame()
-    start_year = 2026
-    is_supply = False
+    start_year = 2029 
+    is_supply = True
     
-    # 🟢 [모드 1] 판매량
-    if mode.startswith("1"):
-        start_year = 2026
-        if up_sales:
-            data_dict = load_all_sheets(up_sales[0] if isinstance(up_sales, list) else up_sales)
-            target_df = None
-            for sheet_name, df in data_dict.items():
-                if "실적" in sheet_name and unit_key in sheet_name:
-                    target_df = df; break
+    # 🟢 [기능 라우팅]
+    if "최종값" in sub_mode:
+        if up_final:
+            data_dict = load_all_sheets(up_final)
+            if len(data_dict) > 0:
+                df_raw = list(data_dict.values())[0]
+                df_final = make_long_data(df_raw, "최종값", mode='detail')
+        else:
+            st.info("👈 좌측에서 [2. 최종값 결과파일]을 업로드하세요."); return
             
-            if target_df is None:
-                for sheet_name, df in data_dict.items():
-                    if "실적" in sheet_name: target_df = df; break
+    elif "사업계획 비교" in sub_mode:
+        if up_supply:
+            data_dict = load_all_sheets(up_supply)
             
-            if target_df is None and len(data_dict) > 0:
-                target_df = list(data_dict.values())[0]
-
-            if target_df is not None:
-                long_a = make_long_data(target_df, "실적", 'sales')
-                long_a = long_a[long_a['연'] <= 2025] 
-                df_final = pd.concat([long_a], ignore_index=True)
-        else: st.info("👈 [판매량 파일]을 업로드하세요."); return
-
-    # 🟢 [모드 2] 공급량
-    elif mode.startswith("2"):
-        start_year = 2029 
-        is_supply = True
-        
-        if "최종값" in sub_mode:
-            if up_final:
-                data_dict = load_all_sheets(up_final)
-                if len(data_dict) > 0:
-                    df_raw = list(data_dict.values())[0]
-                    df_final = make_long_data(df_raw, "최종값", mode='detail')
+            df_act = next((df for name, df in data_dict.items() if "실적" in name and "계획" not in name), None)
+            df_plan = next((df for name, df in data_dict.items() if "사업계획" in name and "실천" not in name), None)
+            df_action = next((df for name, df in data_dict.items() if "실천" in name), None)
+            
+            if df_act is None and len(data_dict) >= 1: df_act = list(data_dict.values())[0]
+            if df_plan is None and len(data_dict) >= 2: df_plan = list(data_dict.values())[1]
+            if df_action is None and len(data_dict) >= 3: df_action = list(data_dict.values())[2]
+            
+            if df_act is not None and df_plan is not None and df_action is not None:
+                render_plan_comparison(df_act, df_plan, df_action, unit)
             else:
-                st.info("👈 [최종값 파일]을 업로드하세요."); return
-        
-        # 🟢 [수정됨] 사업계획 비교 로직 분기 처리
-        elif "사업계획 비교" in sub_mode:
-            if up_supply:
-                data_dict = load_all_sheets(up_supply)
-                
-                # 시트명 기반으로 데이터프레임 추출
-                df_act = next((df for name, df in data_dict.items() if "실적" in name and "계획" not in name), None)
-                df_plan = next((df for name, df in data_dict.items() if "사업계획" in name and "실천" not in name), None)
-                df_action = next((df for name, df in data_dict.items() if "실천" in name), None)
-                
-                # 시트 이름 매칭 실패 시 fallback (딕셔너리 순서)
-                if df_act is None and len(data_dict) >= 1: df_act = list(data_dict.values())[0]
-                if df_plan is None and len(data_dict) >= 2: df_plan = list(data_dict.values())[1]
-                if df_action is None and len(data_dict) >= 3: df_action = list(data_dict.values())[2]
-                
-                if df_act is not None and df_plan is not None and df_action is not None:
-                    render_plan_comparison(df_act, df_plan, df_action, unit)
-                else:
-                    st.warning("⚠️ 업로드된 파일 내에 '실적', '사업계획', '실천사업계획' 관련 시트나 데이터가 충분하지 않습니다.")
-                return # 렌더링 후 조기 종료 (아래 공통 실행 생략)
-            else:
-                st.info("👈 좌측에서 [공급량 파일]을 업로드하세요."); return
+                st.warning("⚠️ 업로드된 파일 내에 '실적', '사업계획', '실천사업계획' 관련 시트나 데이터가 충분하지 않습니다.")
+            return 
+        else:
+            st.info("👈 좌측에서 [1. 공급량 데이터]를 업로드하세요."); return
 
-        else: # 실적분석, 2035 예측, 상품별 예측
-            if up_supply:
-                data_dict = load_all_sheets(up_supply)
-                df_hist, df_plan = None, None
-                for name, df in data_dict.items():
-                    if "실적" in name: df_hist = df; break
-                for name, df in data_dict.items():
-                    if "계획" in name: df_plan = df; break
-                
-                if df_hist is None and len(data_dict) > 0: df_hist = list(data_dict.values())[0]
-                
-                if df_hist is not None:
-                    long_h = make_long_data(df_hist, "실적", 'supply')
-                    df_final = long_h
-                    if df_plan is not None:
-                        long_p = make_long_data(df_plan, "확정계획", 'supply')
-                        df_final = pd.concat([long_h, long_p], ignore_index=True)
-            else: st.info("👈 [공급량 파일]을 업로드하세요."); return
+    else: # 실적분석, 2035 예측, 상품별 예측
+        if up_supply:
+            data_dict = load_all_sheets(up_supply)
+            df_hist, df_plan = None, None
+            for name, df in data_dict.items():
+                if "실적" in name: df_hist = df; break
+            for name, df in data_dict.items():
+                if "계획" in name: df_plan = df; break
+            
+            if df_hist is None and len(data_dict) > 0: df_hist = list(data_dict.values())[0]
+            
+            if df_hist is not None:
+                long_h = make_long_data(df_hist, "실적", 'supply')
+                df_final = long_h
+                if df_plan is not None:
+                    long_p = make_long_data(df_plan, "확정계획", 'supply')
+                    df_final = pd.concat([long_h, long_p], ignore_index=True)
+        else: 
+            st.info("👈 좌측에서 [1. 공급량 데이터]를 업로드하세요."); return
 
     # ── 공통 실행 ──
     if not df_final.empty:
-        if (mode.startswith("2") or mode.startswith("3")) and "GJ" in unit:
+        if "GJ" in unit:
             if "최종값" not in sub_mode: 
                 df_final['값'] = df_final['값'] / 1000
 
@@ -623,19 +560,7 @@ def main():
         
         elif "상품별" in sub_mode:
             df_detail = pd.DataFrame()
-            if mode.startswith("1") and up_sales:
-                dd = load_all_sheets(up_sales[0] if isinstance(up_sales, list) else up_sales)
-                tgt = None
-                for sn, d in dd.items():
-                    if "실적" in sn and unit_key in sn: tgt = d; break
-                if tgt is None:
-                    for sn, d in dd.items():
-                        if "실적" in sn: tgt = d; break
-                if tgt is not None:
-                    df_detail = make_long_data(tgt, "실적", mode='detail')
-                    df_detail = df_detail[df_detail['연'] <= 2025]
-
-            elif mode.startswith("2") and up_supply:
+            if up_supply:
                 dd = load_all_sheets(up_supply)
                 dh, dp = None, None
                 for n, d in dd.items():
@@ -652,7 +577,7 @@ def main():
                         df_detail = pd.concat([ld_h, ld_p], ignore_index=True)
             
             if not df_detail.empty:
-                if (mode.startswith("2")) and "GJ" in unit:
+                if "GJ" in unit:
                     df_detail['값'] = df_detail['값'] / 1000
                 
                 render_prediction_2035(df_detail, unit, start_year, train_years, is_supply, custom_sort_list=ORDER_LIST_DETAIL)
