@@ -114,7 +114,6 @@ def render_simple_dashboard(df, unit):
     
     df['연'] = df['연'].astype(int)
     
-    # 🟢 구분 명칭 순서 동기화
     order_dict = {"실적": 1, "기존계획량": 2, "실천계획량": 3}
     df['sort_key'] = df['연'] * 10 + df['구분'].map(order_dict)
     df = df.sort_values(['sort_key', '월'])
@@ -136,7 +135,6 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 1️⃣ 전체량 분석")
     
-    # 🟢 전체량 상단 필터부 (연도 선택 & 구분 선택 기능 추가)
     default_years_1 = years[-5:] if len(years) >= 5 else years
     
     col_y1, col_t1 = st.columns(2)
@@ -146,7 +144,6 @@ def render_simple_dashboard(df, unit):
         selected_types_1 = st.multiselect("📊 [전체량] 조회할 구분 선택", options=["실적", "기존계획량", "실천계획량"], default=["실적", "기존계획량", "실천계획량"], key="type_sec1")
     
     if selected_years_1 and selected_types_1:
-        # 연도와 구분을 동시에 만족하는 데이터 필터링
         df_filt1 = df[df['연'].isin(selected_years_1) & df['구분'].isin(selected_types_1)]
         filtered_x_labels_1 = [x for x in unique_x_labels if int(x[:4]) in selected_years_1 and any(t in x for t in selected_types_1)]
 
@@ -180,7 +177,6 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 2️⃣ 용도별 구성 분석")
     
-    # 🟢 용도별 상단 필터부 (연도 선택 & 구분 선택 기능 추가)
     default_years_2 = [y for y in years if y in [2025, 2026]]
     if not default_years_2: default_years_2 = years[-2:] if len(years) >= 2 else years
         
@@ -220,6 +216,11 @@ def main():
         st.header("⚙️ 기본 설정")
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
         
+        # 🟢 [요청 반영] 부피(천m³) 선택 시 기준열량 입력창 활성화 (디폴트 42.563)
+        heating_value = 42.563
+        if "부피" in unit:
+            heating_value = st.number_input("(기준열량 MJ/Nm3 : 42.563 )", value=42.563, format="%.3f")
+        
         st.markdown("---")
         st.subheader("📂 데이터 업로드")
         up_supply = st.file_uploader("공급량 데이터 업로드 (새 파일이 있으면 우선 반영됩니다)", type=["xlsx", "csv"])
@@ -249,10 +250,9 @@ def main():
         
         long_act = make_long_data(df_act, "실적") if df_act is not None else pd.DataFrame()
         long_plan = make_long_data(df_plan, "기존계획량") if df_plan is not None else pd.DataFrame()
-        long_action = make_long_data(df_action, "실천계획량") if df_action is not None else pd.DataFrame() # 🟢 명칭 수정
+        long_action = make_long_data(df_action, "실천계획량") if df_action is not None else pd.DataFrame()
         
         if not long_act.empty:
-            # 2026년 하이브리드 결합 로직 (1~3월 실적 반영 구조 유지)
             df_hist = long_act[long_act['연'] < 2026]
             df_act_2026 = long_act[(long_act['연'] == 2026) & (long_act['월'] <= 3)]
             
@@ -277,8 +277,11 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
+            # 🟢 [단위 변환 로직 보완] 입력받은 기준열량 수치 기반 변환 연산식 적용
             if "GJ" in unit:
                 df_final['값'] = df_final['값'] / 1000
+            elif "부피" in unit:
+                df_final['값'] = df_final['값'] / heating_value / 1000
                 
             render_simple_dashboard(df_final, unit)
         else:
