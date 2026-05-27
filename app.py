@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import re
+import os
 
 # ─────────────────────────────────────────────────────────
 # 🟢 1. 기본 설정
@@ -54,7 +55,8 @@ def load_all_sheets(uploaded_file):
         for sheet in excel.sheet_names:
             data_dict[sheet] = excel.parse(sheet)
     except:
-        uploaded_file.seek(0)
+        if hasattr(uploaded_file, 'seek'):
+            uploaded_file.seek(0)
         df = pd.read_csv(uploaded_file, encoding='utf-8-sig')
         data_dict["default"] = df
     return data_dict
@@ -110,19 +112,15 @@ def make_long_data(df, label):
 def render_simple_dashboard(df, unit):
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
-    # 소수점 제거를 위해 연도를 정수형으로 확실히 변환
     df['연'] = df['연'].astype(int)
     
-    # 정렬을 위한 헬퍼 컬럼 생성
     order_dict = {"실적": 1, "기존계획량": 2, "new 계획량": 3}
     df['sort_key'] = df['연'] * 10 + df['구분'].map(order_dict)
     df = df.sort_values(['sort_key', '월'])
     
-    # X축 및 범례에 사용될 통합 라벨
     df['연_구분'] = df['연'].astype(str) + " (" + df['구분'] + ")"
     unique_x_labels = df['연_구분'].unique().tolist()
     
-    # 용도 그룹 정렬
     current_groups = df['그룹'].unique()
     valid_order = [g for g in ORDER_LIST if g in current_groups]
     rest_groups = [g for g in current_groups if g not in valid_order]
@@ -137,7 +135,6 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 1️⃣ 전체량 분석")
     
-    # 전체량 전용 연도 선택 (디폴트 5년)
     default_years_1 = years[-5:] if len(years) >= 5 else years
     selected_years_1 = st.multiselect("📅 [전체량] 조회할 연도 선택", options=years, default=default_years_1, key="sec1")
     
@@ -152,7 +149,6 @@ def render_simple_dashboard(df, unit):
             mon_grp = df_filt1.groupby(['연_구분', '월'])['값'].sum().reset_index()
             fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
                            category_orders={"연_구분": filtered_x_labels_1})
-            # X축 1월~12월 고정 표시
             fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
             st.plotly_chart(fig1, use_container_width=True)
             
@@ -161,8 +157,7 @@ def render_simple_dashboard(df, unit):
             yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
             fig2 = px.bar(yr_grp1, x='연_구분', y='값', color='그룹', text_auto='.2s',
                           category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
-            # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정
-            fig2.for_each_trace(lambda t: t.update(visible=True if t.name == '가정용' else 'legendonly'))
+            # 🟢 [요청 반영] 오른쪽 막대 그래프는 기존처럼 필터링 없이 전체 공급량을 스택으로 표시
             st.plotly_chart(fig2, use_container_width=True)
             
         st.markdown("##### 📋 전체량 상세 수치")
@@ -178,7 +173,6 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 2️⃣ 용도별 구성 분석")
     
-    # 용도별 전용 연도 선택 (디폴트 2025~2026년)
     default_years_2 = [y for y in years if y in [2025, 2026]]
     if not default_years_2: default_years_2 = years[-2:] if len(years) >= 2 else years
     selected_years_2 = st.multiselect("📅 [용도별] 조회할 연도 선택", options=years, default=default_years_2, key="sec2")
@@ -189,15 +183,12 @@ def render_simple_dashboard(df, unit):
 
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
         
-        # 월별 비교를 위해 그룹바이 기준에 '월' 추가
         sec2_mon_grp = df_filt2.groupby(['연_구분', '그룹', '월'])['값'].sum().reset_index()
         
-        # X축은 월, 색상은 용도, 선 스타일(dash)은 연도/구분으로 매핑하여 연도별 차이 확인
         fig3 = px.line(sec2_mon_grp, x='월', y='값', color='그룹', line_dash='연_구분', markers=True,
                        category_orders={"연_구분": filtered_x_labels_2, "그룹": final_group_order})
         
         fig3.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정 (trace.name에 가정용이 포함되어 있는지 확인)
         fig3.for_each_trace(lambda t: t.update(visible=True if '가정용' in t.name else 'legendonly'))
         st.plotly_chart(fig3, use_container_width=True)
         
@@ -218,28 +209,67 @@ def main():
         
         st.markdown("---")
         st.subheader("📂 데이터 업로드")
-        up_supply = st.file_uploader("공급량 데이터 (실적, 기존계획, new계획 포함 파일)", type=["xlsx", "csv"])
+        up_supply = st.file_uploader("공급량 데이터 업로드 (새 파일이 있으면 우선 반영됩니다)", type=["xlsx", "csv"])
     
-    if up_supply:
-        data_dict = load_all_sheets(up_supply)
+    # 🟢 [요청 반영] 디폴트 파일 경로 자동 지정 및 스위칭 로직
+    default_file = "공급량실적_계획_실적_MJ.xlsx"
+    target_file = None
+    
+    if up_supply is not None:
+        target_file = up_supply
+    elif os.path.exists(default_file):
+        target_file = default_file
+
+    if target_file:
+        data_dict = load_all_sheets(target_file)
         
-        df_act = next((df for name, df in data_dict.items() if "실적" in name and "계획" not in name), None)
-        df_plan = next((df for name, df in data_dict.items() if "사업계획" in name and "실천" not in name), None)
-        df_action = next((df for name, df in data_dict.items() if "실천" in name), None)
+        # 명확하게 요청하신 시트명으로 먼저 조회 시도
+        df_act = data_dict.get("공급량_실적")
+        df_plan = data_dict.get("공급량_사업계획")
+        df_action = data_dict.get("공급량_실천사업계획")
         
+        # 시트명이 다를 경우를 대비한 가벼운 텍스트 매칭 fallback
+        if df_act is None: df_act = next((df for name, df in data_dict.items() if "실적" in name and "계획" not in name), None)
+        if df_plan is None: df_plan = next((df for name, df in data_dict.items() if "사업계획" in name and "실천" not in name), None)
+        if df_action is None: df_action = next((df for name, df in data_dict.items() if "실천" in name), None)
+        
+        # 완전 매칭 불가 시 순서 매칭 fallback
         if df_act is None and len(data_dict) >= 1: df_act = list(data_dict.values())[0]
         if df_plan is None and len(data_dict) >= 2: df_plan = list(data_dict.values())[1]
         if df_action is None and len(data_dict) >= 3: df_action = list(data_dict.values())[2]
         
-        # 라벨명을 "과거 실적"에서 "실적"으로 변경
         long_act = make_long_data(df_act, "실적") if df_act is not None else pd.DataFrame()
         long_plan = make_long_data(df_plan, "기존계획량") if df_plan is not None else pd.DataFrame()
         long_action = make_long_data(df_action, "new 계획량") if df_action is not None else pd.DataFrame()
         
-        df_final = pd.concat([long_act, long_plan, long_action], ignore_index=True)
-        
-        if not df_final.empty:
-            # 2026년 12월(2026년 데이터)까지만 남기도록 필터링
+        if not long_act.empty:
+            # 🟢 [요청 반영] 2026년 실적(1~3월)과 4~12월 계획량 결합 하이브리드 로직
+            # 1) 2017 ~ 2025 과거 실적 순수본
+            df_hist = long_act[long_act['연'] < 2026]
+            
+            # 2) 2026년 순수 실적 (~3월까지만 필터링)
+            df_act_2026 = long_act[(long_act['연'] == 2026) & (long_act['월'] <= 3)]
+            
+            # 3) 2026년 기존계획량 (1~3월 실적 + 4~12월 사업계획)
+            df_plan_2026_apr_dec = long_plan[(long_plan['연'] == 2026) & (long_plan['월'] >= 4)]
+            df_plan_2026_jan_mar = df_act_2026.copy()
+            df_plan_2026_jan_mar['구분'] = "기존계획량"
+            df_plan_2026_apr_dec = df_plan_2026_apr_dec.copy()
+            df_plan_2026_apr_dec['구분'] = "기존계획량"
+            df_plan_2026 = pd.concat([df_plan_2026_jan_mar, df_plan_2026_apr_dec], ignore_index=True)
+            
+            # 4) 2026년 new 계획량 (1~3월 실적 + 4~12월 실천사업계획)
+            df_action_2026_apr_dec = long_action[(long_action['연'] == 2026) & (long_action['월'] >= 4)]
+            df_action_2026_jan_mar = df_act_2026.copy()
+            df_action_2026_jan_mar['구분'] = "new 계획량"
+            df_action_2026_apr_dec = df_action_2026_apr_dec.copy()
+            df_action_2026_apr_dec['구분'] = "new 계획량"
+            df_action_2026 = pd.concat([df_action_2026_jan_mar, df_action_2026_apr_dec], ignore_index=True)
+            
+            # 전체 최종 결합
+            df_final = pd.concat([df_hist, df_act_2026, df_plan_2026, df_action_2026], ignore_index=True)
+            
+            # 2026년 12월까지만 최종 제한
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
@@ -248,9 +278,9 @@ def main():
                 
             render_simple_dashboard(df_final, unit)
         else:
-            st.warning("⚠️ 유효한 데이터를 추출하지 못했습니다. 파일 양식을 확인해주세요.")
+            st.warning("⚠️ 유효한 실적 데이터를 추출하지 못했습니다. 파일 구조를 확인해주세요.")
     else:
-        st.info("👈 좌측 사이드바에서 공급량 파일을 업로드해주세요.")
+        st.info("👈 좌측 사이드바에서 공급량 파일을 업로드하거나, 프로젝트 폴더 내에 공급량실적_계획_실적_MJ.xlsx 파일을 배치해 주세요.")
 
 if __name__ == "__main__":
     main()
