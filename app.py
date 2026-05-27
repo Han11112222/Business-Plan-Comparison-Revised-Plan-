@@ -128,16 +128,7 @@ def render_simple_dashboard(df, unit):
     rest_groups = [g for g in current_groups if g not in valid_order]
     final_group_order = valid_order + sorted(rest_groups)
 
-    # 연도 필터링 (디폴트: 2025~2026년)
     years = sorted(df['연'].unique().tolist())
-    default_years = [y for y in years if y in [2025, 2026]]
-    if not default_years: default_years = years[-2:] if len(years) >= 2 else years
-    
-    selected_years = st.multiselect("📅 조회할 연도 선택", options=years, default=default_years)
-    if not selected_years: return
-    
-    df_filt = df[df['연'].isin(selected_years)]
-    filtered_x_labels = [x for x in unique_x_labels if int(x[:4]) in selected_years]
 
     st.markdown("---")
     
@@ -145,31 +136,40 @@ def render_simple_dashboard(df, unit):
     # 1️⃣ 상단: 전체량 분석
     # ==========================================
     st.markdown("### 1️⃣ 전체량 분석")
-    c1, c2 = st.columns(2)
     
-    with c1:
-        st.markdown("#### 📈 전체 월별 공급량 추이")
-        mon_grp = df_filt.groupby(['연_구분', '월'])['값'].sum().reset_index()
-        fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
-                       category_orders={"연_구분": filtered_x_labels})
-        # X축 1월~12월 고정 표시
-        fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        st.plotly_chart(fig1, use_container_width=True)
+    # 전체량 전용 연도 선택 (디폴트 5년)
+    default_years_1 = years[-5:] if len(years) >= 5 else years
+    selected_years_1 = st.multiselect("📅 [전체량] 조회할 연도 선택", options=years, default=default_years_1, key="sec1")
+    
+    if selected_years_1:
+        df_filt1 = df[df['연'].isin(selected_years_1)]
+        filtered_x_labels_1 = [x for x in unique_x_labels if int(x[:4]) in selected_years_1]
+
+        c1, c2 = st.columns(2)
         
-    with c2:
-        st.markdown("#### 🧱 연도/구분별 용도 구성비")
-        yr_grp = df_filt.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
-        fig2 = px.bar(yr_grp, x='연_구분', y='값', color='그룹', text_auto='.2s',
-                      category_orders={"연_구분": filtered_x_labels, "그룹": final_group_order})
-        # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정
-        fig2.for_each_trace(lambda t: t.update(visible=True if t.name == '가정용' else 'legendonly'))
-        st.plotly_chart(fig2, use_container_width=True)
-        
-    st.markdown("##### 📋 전체량 상세 수치")
-    piv1 = df_filt.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
-    piv1 = piv1.reindex(index=filtered_x_labels, columns=[c for c in final_group_order if c in piv1.columns])
-    piv1['총계'] = piv1.sum(axis=1)
-    st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
+        with c1:
+            st.markdown("#### 📈 전체 월별 공급량 추이")
+            mon_grp = df_filt1.groupby(['연_구분', '월'])['값'].sum().reset_index()
+            fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
+                           category_orders={"연_구분": filtered_x_labels_1})
+            # X축 1월~12월 고정 표시
+            fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
+            st.plotly_chart(fig1, use_container_width=True)
+            
+        with c2:
+            st.markdown("#### 🧱 연도/구분별 용도 구성비")
+            yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
+            fig2 = px.bar(yr_grp1, x='연_구분', y='값', color='그룹', text_auto='.2s',
+                          category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
+            # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정
+            fig2.for_each_trace(lambda t: t.update(visible=True if t.name == '가정용' else 'legendonly'))
+            st.plotly_chart(fig2, use_container_width=True)
+            
+        st.markdown("##### 📋 전체량 상세 수치")
+        piv1 = df_filt1.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
+        piv1 = piv1.reindex(index=filtered_x_labels_1, columns=[c for c in final_group_order if c in piv1.columns])
+        piv1['총계'] = piv1.sum(axis=1)
+        st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
 
     st.markdown("---")
 
@@ -178,17 +178,33 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 2️⃣ 용도별 구성 분석")
     
-    st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이")
-    fig3 = px.line(yr_grp, x='연_구분', y='값', color='그룹', markers=True,
-                   category_orders={"연_구분": filtered_x_labels, "그룹": final_group_order})
-    # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정
-    fig3.for_each_trace(lambda t: t.update(visible=True if t.name == '가정용' else 'legendonly'))
-    st.plotly_chart(fig3, use_container_width=True)
+    # 용도별 전용 연도 선택 (디폴트 2025~2026년)
+    default_years_2 = [y for y in years if y in [2025, 2026]]
+    if not default_years_2: default_years_2 = years[-2:] if len(years) >= 2 else years
+    selected_years_2 = st.multiselect("📅 [용도별] 조회할 연도 선택", options=years, default=default_years_2, key="sec2")
     
-    st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
-    piv2 = df_filt.pivot_table(index='그룹', columns='연_구분', values='값', aggfunc='sum').fillna(0)
-    piv2 = piv2.reindex(index=[c for c in final_group_order if c in piv2.index], columns=filtered_x_labels)
-    st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
+    if selected_years_2:
+        df_filt2 = df[df['연'].isin(selected_years_2)]
+        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2]
+
+        st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
+        
+        # 월별 비교를 위해 그룹바이 기준에 '월' 추가
+        sec2_mon_grp = df_filt2.groupby(['연_구분', '그룹', '월'])['값'].sum().reset_index()
+        
+        # X축은 월, 색상은 용도, 선 스타일(dash)은 연도/구분으로 매핑하여 연도별 차이 확인
+        fig3 = px.line(sec2_mon_grp, x='월', y='값', color='그룹', line_dash='연_구분', markers=True,
+                       category_orders={"연_구분": filtered_x_labels_2, "그룹": final_group_order})
+        
+        fig3.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
+        # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정 (trace.name에 가정용이 포함되어 있는지 확인)
+        fig3.for_each_trace(lambda t: t.update(visible=True if '가정용' in t.name else 'legendonly'))
+        st.plotly_chart(fig3, use_container_width=True)
+        
+        st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
+        piv2 = df_filt2.pivot_table(index='그룹', columns='연_구분', values='값', aggfunc='sum').fillna(0)
+        piv2 = piv2.reindex(index=[c for c in final_group_order if c in piv2.index], columns=filtered_x_labels_2)
+        st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
 
 # ─────────────────────────────────────────────────────────
 # 🟢 5. 메인 실행
