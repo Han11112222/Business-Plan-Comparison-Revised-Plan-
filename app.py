@@ -201,9 +201,11 @@ def render_simple_dashboard(df, unit):
         fig3.for_each_trace(lambda t: t.update(visible=True if '가정용' in t.name else 'legendonly'))
         st.plotly_chart(fig3, use_container_width=True)
         
+        # 🟢 [요청 반영] 용도별 표 역시 가로: 용도, 세로: 연도_구분으로 맞추고 맨 우측 총계 추가
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
-        piv2 = df_filt2.pivot_table(index='그룹', columns='연_구분', values='값', aggfunc='sum').fillna(0)
-        piv2 = piv2.reindex(index=[c for c in final_group_order if c in piv2.index], columns=filtered_x_labels_2)
+        piv2 = df_filt2.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
+        piv2 = piv2.reindex(index=filtered_x_labels_2, columns=[c for c in final_group_order if c in piv2.columns])
+        piv2['총계'] = piv2.sum(axis=1)
         st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
 
 # ─────────────────────────────────────────────────────────
@@ -216,7 +218,6 @@ def main():
         st.header("⚙️ 기본 설정")
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
         
-        # 🟢 [요청 반영] 부피(천m³) 선택 시 기준열량 입력창 활성화 (디폴트 42.563)
         heating_value = 42.563
         if "부피" in unit:
             heating_value = st.number_input("(기준열량 MJ/Nm3 : 42.563 )", value=42.563, format="%.3f")
@@ -256,7 +257,6 @@ def main():
             df_hist = long_act[long_act['연'] < 2026]
             df_act_2026 = long_act[(long_act['연'] == 2026) & (long_act['월'] <= 3)]
             
-            # 기존계획량 (1~3월 실적 + 4~12월 사업계획)
             df_plan_2026_apr_dec = long_plan[(long_plan['연'] == 2026) & (long_plan['월'] >= 4)]
             df_plan_2026_jan_mar = df_act_2026.copy()
             df_plan_2026_jan_mar['구분'] = "기존계획량"
@@ -264,7 +264,6 @@ def main():
             df_plan_2026_apr_dec['구분'] = "기존계획량"
             df_plan_2026 = pd.concat([df_plan_2026_jan_mar, df_plan_2026_apr_dec], ignore_index=True)
             
-            # 실천계획량 (1~3월 실적 + 4~12월 실천사업계획)
             df_action_2026_apr_dec = long_action[(long_action['연'] == 2026) & (long_action['월'] >= 4)]
             df_action_2026_jan_mar = df_act_2026.copy()
             df_action_2026_jan_mar['구분'] = "실천계획량"
@@ -277,7 +276,6 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
-            # 🟢 [단위 변환 로직 보완] 입력받은 기준열량 수치 기반 변환 연산식 적용
             if "GJ" in unit:
                 df_final['값'] = df_final['값'] / 1000
             elif "부피" in unit:
