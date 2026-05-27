@@ -110,12 +110,15 @@ def make_long_data(df, label):
 def render_simple_dashboard(df, unit):
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
-    # 정렬을 위한 헬퍼 컬럼 생성 (과거 실적 -> 기존계획 -> new 계획 순서 보장)
-    order_dict = {"과거 실적": 1, "기존계획량": 2, "new 계획량": 3}
-    df['sort_key'] = df['연'].astype(int) * 10 + df['구분'].map(order_dict)
+    # 소수점 제거를 위해 연도를 정수형으로 확실히 변환
+    df['연'] = df['연'].astype(int)
+    
+    # 정렬을 위한 헬퍼 컬럼 생성
+    order_dict = {"실적": 1, "기존계획량": 2, "new 계획량": 3}
+    df['sort_key'] = df['연'] * 10 + df['구분'].map(order_dict)
     df = df.sort_values(['sort_key', '월'])
     
-    # X축 및 범례에 사용될 통합 라벨 (예: 2026 (new 계획량))
+    # X축 및 범례에 사용될 통합 라벨
     df['연_구분'] = df['연'].astype(str) + " (" + df['구분'] + ")"
     unique_x_labels = df['연_구분'].unique().tolist()
     
@@ -125,9 +128,12 @@ def render_simple_dashboard(df, unit):
     rest_groups = [g for g in current_groups if g not in valid_order]
     final_group_order = valid_order + sorted(rest_groups)
 
-    # 연도 필터링
+    # 연도 필터링 (디폴트: 2025~2026년)
     years = sorted(df['연'].unique().tolist())
-    selected_years = st.multiselect("📅 조회할 연도 선택", options=years, default=years)
+    default_years = [y for y in years if y in [2025, 2026]]
+    if not default_years: default_years = years[-2:] if len(years) >= 2 else years
+    
+    selected_years = st.multiselect("📅 조회할 연도 선택", options=years, default=default_years)
     if not selected_years: return
     
     df_filt = df[df['연'].isin(selected_years)]
@@ -146,7 +152,8 @@ def render_simple_dashboard(df, unit):
         mon_grp = df_filt.groupby(['연_구분', '월'])['값'].sum().reset_index()
         fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
                        category_orders={"연_구분": filtered_x_labels})
-        fig1.update_xaxes(dtick=1)
+        # X축 1월~12월 고정 표시
+        fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
         st.plotly_chart(fig1, use_container_width=True)
         
     with c2:
@@ -154,11 +161,12 @@ def render_simple_dashboard(df, unit):
         yr_grp = df_filt.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
         fig2 = px.bar(yr_grp, x='연_구분', y='값', color='그룹', text_auto='.2s',
                       category_orders={"연_구분": filtered_x_labels, "그룹": final_group_order})
+        # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정
+        fig2.for_each_trace(lambda t: t.update(visible=True if t.name == '가정용' else 'legendonly'))
         st.plotly_chart(fig2, use_container_width=True)
         
     st.markdown("##### 📋 전체량 상세 수치")
     piv1 = df_filt.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
-    # 정렬 적용
     piv1 = piv1.reindex(index=filtered_x_labels, columns=[c for c in final_group_order if c in piv1.columns])
     piv1['총계'] = piv1.sum(axis=1)
     st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
@@ -173,10 +181,11 @@ def render_simple_dashboard(df, unit):
     st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이")
     fig3 = px.line(yr_grp, x='연_구분', y='값', color='그룹', markers=True,
                    category_orders={"연_구분": filtered_x_labels, "그룹": final_group_order})
+    # '가정용'만 디폴트로 표시, 나머지는 클릭 시 표시되도록 설정
+    fig3.for_each_trace(lambda t: t.update(visible=True if t.name == '가정용' else 'legendonly'))
     st.plotly_chart(fig3, use_container_width=True)
     
     st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
-    # 비교하기 쉽게 용도를 인덱스(세로)로, 연도/구분을 컬럼(가로)으로 배치
     piv2 = df_filt.pivot_table(index='그룹', columns='연_구분', values='값', aggfunc='sum').fillna(0)
     piv2 = piv2.reindex(index=[c for c in final_group_order if c in piv2.index], columns=filtered_x_labels)
     st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
@@ -198,25 +207,26 @@ def main():
     if up_supply:
         data_dict = load_all_sheets(up_supply)
         
-        # 시트 이름에 따라 자동 분류
         df_act = next((df for name, df in data_dict.items() if "실적" in name and "계획" not in name), None)
         df_plan = next((df for name, df in data_dict.items() if "사업계획" in name and "실천" not in name), None)
         df_action = next((df for name, df in data_dict.items() if "실천" in name), None)
         
-        # 이름 매칭 실패 시 시트 순서대로 할당 (1번째: 실적, 2번째: 기존계획, 3번째: 실천계획)
         if df_act is None and len(data_dict) >= 1: df_act = list(data_dict.values())[0]
         if df_plan is None and len(data_dict) >= 2: df_plan = list(data_dict.values())[1]
         if df_action is None and len(data_dict) >= 3: df_action = list(data_dict.values())[2]
         
-        # 데이터 Long form 변환 및 태깅
-        long_act = make_long_data(df_act, "과거 실적") if df_act is not None else pd.DataFrame()
+        # 라벨명을 "과거 실적"에서 "실적"으로 변경
+        long_act = make_long_data(df_act, "실적") if df_act is not None else pd.DataFrame()
         long_plan = make_long_data(df_plan, "기존계획량") if df_plan is not None else pd.DataFrame()
         long_action = make_long_data(df_action, "new 계획량") if df_action is not None else pd.DataFrame()
         
         df_final = pd.concat([long_act, long_plan, long_action], ignore_index=True)
         
         if not df_final.empty:
-            # GJ 단위 변환 적용
+            # 2026년 12월(2026년 데이터)까지만 남기도록 필터링
+            df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
+            df_final = df_final[df_final['연'] <= 2026]
+            
             if "GJ" in unit:
                 df_final['값'] = df_final['값'] / 1000
                 
