@@ -114,7 +114,8 @@ def render_simple_dashboard(df, unit):
     
     df['연'] = df['연'].astype(int)
     
-    order_dict = {"실적": 1, "기존계획량": 2, "new 계획량": 3}
+    # 🟢 구분 명칭 순서 동기화
+    order_dict = {"실적": 1, "기존계획량": 2, "실천계획량": 3}
     df['sort_key'] = df['연'] * 10 + df['구분'].map(order_dict)
     df = df.sort_values(['sort_key', '월'])
     
@@ -135,12 +136,19 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 1️⃣ 전체량 분석")
     
+    # 🟢 전체량 상단 필터부 (연도 선택 & 구분 선택 기능 추가)
     default_years_1 = years[-5:] if len(years) >= 5 else years
-    selected_years_1 = st.multiselect("📅 [전체량] 조회할 연도 선택", options=years, default=default_years_1, key="sec1")
     
-    if selected_years_1:
-        df_filt1 = df[df['연'].isin(selected_years_1)]
-        filtered_x_labels_1 = [x for x in unique_x_labels if int(x[:4]) in selected_years_1]
+    col_y1, col_t1 = st.columns(2)
+    with col_y1:
+        selected_years_1 = st.multiselect("📅 [전체량] 조회할 연도 선택", options=years, default=default_years_1, key="sec1")
+    with col_t1:
+        selected_types_1 = st.multiselect("📊 [전체량] 조회할 구분 선택", options=["실적", "기존계획량", "실천계획량"], default=["실적", "기존계획량", "실천계획량"], key="type_sec1")
+    
+    if selected_years_1 and selected_types_1:
+        # 연도와 구분을 동시에 만족하는 데이터 필터링
+        df_filt1 = df[df['연'].isin(selected_years_1) & df['구분'].isin(selected_types_1)]
+        filtered_x_labels_1 = [x for x in unique_x_labels if int(x[:4]) in selected_years_1 and any(t in x for t in selected_types_1)]
 
         c1, c2 = st.columns(2)
         
@@ -157,7 +165,6 @@ def render_simple_dashboard(df, unit):
             yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
             fig2 = px.bar(yr_grp1, x='연_구분', y='값', color='그룹', text_auto='.2s',
                           category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
-            # 🟢 [요청 반영] 오른쪽 막대 그래프는 기존처럼 필터링 없이 전체 공급량을 스택으로 표시
             st.plotly_chart(fig2, use_container_width=True)
             
         st.markdown("##### 📋 전체량 상세 수치")
@@ -173,13 +180,19 @@ def render_simple_dashboard(df, unit):
     # ==========================================
     st.markdown("### 2️⃣ 용도별 구성 분석")
     
+    # 🟢 용도별 상단 필터부 (연도 선택 & 구분 선택 기능 추가)
     default_years_2 = [y for y in years if y in [2025, 2026]]
     if not default_years_2: default_years_2 = years[-2:] if len(years) >= 2 else years
-    selected_years_2 = st.multiselect("📅 [용도별] 조회할 연도 선택", options=years, default=default_years_2, key="sec2")
+        
+    col_y2, col_t2 = st.columns(2)
+    with col_y2:
+        selected_years_2 = st.multiselect("📅 [용도별] 조회할 연도 선택", options=years, default=default_years_2, key="sec2")
+    with col_t2:
+        selected_types_2 = st.multiselect("📊 [용도별] 조회할 구분 선택", options=["실적", "기존계획량", "실천계획량"], default=["실적", "기존계획량", "실천계획량"], key="type_sec2")
     
-    if selected_years_2:
-        df_filt2 = df[df['연'].isin(selected_years_2)]
-        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2]
+    if selected_years_2 and selected_types_2:
+        df_filt2 = df[df['연'].isin(selected_years_2) & df['구분'].isin(selected_types_2)]
+        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2)]
 
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
         
@@ -211,7 +224,6 @@ def main():
         st.subheader("📂 데이터 업로드")
         up_supply = st.file_uploader("공급량 데이터 업로드 (새 파일이 있으면 우선 반영됩니다)", type=["xlsx", "csv"])
     
-    # 🟢 [요청 반영] 디폴트 파일 경로 자동 지정 및 스위칭 로직
     default_file = "공급량실적_계획_실적_MJ.xlsx"
     target_file = None
     
@@ -223,34 +235,28 @@ def main():
     if target_file:
         data_dict = load_all_sheets(target_file)
         
-        # 명확하게 요청하신 시트명으로 먼저 조회 시도
         df_act = data_dict.get("공급량_실적")
         df_plan = data_dict.get("공급량_사업계획")
         df_action = data_dict.get("공급량_실천사업계획")
         
-        # 시트명이 다를 경우를 대비한 가벼운 텍스트 매칭 fallback
         if df_act is None: df_act = next((df for name, df in data_dict.items() if "실적" in name and "계획" not in name), None)
         if df_plan is None: df_plan = next((df for name, df in data_dict.items() if "사업계획" in name and "실천" not in name), None)
         if df_action is None: df_action = next((df for name, df in data_dict.items() if "실천" in name), None)
         
-        # 완전 매칭 불가 시 순서 매칭 fallback
         if df_act is None and len(data_dict) >= 1: df_act = list(data_dict.values())[0]
         if df_plan is None and len(data_dict) >= 2: df_plan = list(data_dict.values())[1]
         if df_action is None and len(data_dict) >= 3: df_action = list(data_dict.values())[2]
         
         long_act = make_long_data(df_act, "실적") if df_act is not None else pd.DataFrame()
         long_plan = make_long_data(df_plan, "기존계획량") if df_plan is not None else pd.DataFrame()
-        long_action = make_long_data(df_action, "new 계획량") if df_action is not None else pd.DataFrame()
+        long_action = make_long_data(df_action, "실천계획량") if df_action is not None else pd.DataFrame() # 🟢 명칭 수정
         
         if not long_act.empty:
-            # 🟢 [요청 반영] 2026년 실적(1~3월)과 4~12월 계획량 결합 하이브리드 로직
-            # 1) 2017 ~ 2025 과거 실적 순수본
+            # 2026년 하이브리드 결합 로직 (1~3월 실적 반영 구조 유지)
             df_hist = long_act[long_act['연'] < 2026]
-            
-            # 2) 2026년 순수 실적 (~3월까지만 필터링)
             df_act_2026 = long_act[(long_act['연'] == 2026) & (long_act['월'] <= 3)]
             
-            # 3) 2026년 기존계획량 (1~3월 실적 + 4~12월 사업계획)
+            # 기존계획량 (1~3월 실적 + 4~12월 사업계획)
             df_plan_2026_apr_dec = long_plan[(long_plan['연'] == 2026) & (long_plan['월'] >= 4)]
             df_plan_2026_jan_mar = df_act_2026.copy()
             df_plan_2026_jan_mar['구분'] = "기존계획량"
@@ -258,18 +264,16 @@ def main():
             df_plan_2026_apr_dec['구분'] = "기존계획량"
             df_plan_2026 = pd.concat([df_plan_2026_jan_mar, df_plan_2026_apr_dec], ignore_index=True)
             
-            # 4) 2026년 new 계획량 (1~3월 실적 + 4~12월 실천사업계획)
+            # 실천계획량 (1~3월 실적 + 4~12월 실천사업계획)
             df_action_2026_apr_dec = long_action[(long_action['연'] == 2026) & (long_action['월'] >= 4)]
             df_action_2026_jan_mar = df_act_2026.copy()
-            df_action_2026_jan_mar['구분'] = "new 계획량"
+            df_action_2026_jan_mar['구분'] = "실천계획량"
             df_action_2026_apr_dec = df_action_2026_apr_dec.copy()
-            df_action_2026_apr_dec['구분'] = "new 계획량"
+            df_action_2026_apr_dec['구분'] = "실천계획량"
             df_action_2026 = pd.concat([df_action_2026_jan_mar, df_action_2026_apr_dec], ignore_index=True)
             
-            # 전체 최종 결합
             df_final = pd.concat([df_hist, df_act_2026, df_plan_2026, df_action_2026], ignore_index=True)
             
-            # 2026년 12월까지만 최종 제한
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
