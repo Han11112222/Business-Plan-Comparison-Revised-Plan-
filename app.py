@@ -147,22 +147,26 @@ def render_simple_dashboard(df, unit):
         df_filt1 = df[df['연'].isin(selected_years_1) & df['구분'].isin(selected_types_1)]
         filtered_x_labels_1 = [x for x in unique_x_labels if int(x[:4]) in selected_years_1 and any(t in x for t in selected_types_1)]
 
-        c1, c2 = st.columns(2)
-        
-        with c1:
-            st.markdown("#### 📈 전체 월별 공급량 추이")
-            mon_grp = df_filt1.groupby(['연_구분', '월'])['값'].sum().reset_index()
-            fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
-                           category_orders={"연_구분": filtered_x_labels_1})
-            fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-            st.plotly_chart(fig1, use_container_width=True)
+        # 🟢 [요청 반영] 명확한 색상 구분을 위한 색상 강제 매핑 (값이 다르면 다른 색으로 보임)
+        color_map = {}
+        palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+        for i, lbl in enumerate(unique_x_labels):
+            color_map[lbl] = palette[i % len(palette)]
+
+        # 🟢 [요청 반영] 좌우 분할(columns) 제거하고 위아래로 큼직하게 배치
+        st.markdown("#### 📈 전체 월별 공급량 추이")
+        mon_grp = df_filt1.groupby(['연_구분', '월'])['값'].sum().reset_index()
+        fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
+                       category_orders={"연_구분": filtered_x_labels_1},
+                       color_discrete_map=color_map) # 색상 고정 매핑 적용
+        fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
+        st.plotly_chart(fig1, use_container_width=True)
             
-        with c2:
-            st.markdown("#### 🧱 연도/구분별 용도 구성비")
-            yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
-            fig2 = px.bar(yr_grp1, x='연_구분', y='값', color='그룹', text_auto='.2s',
-                          category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
-            st.plotly_chart(fig2, use_container_width=True)
+        st.markdown("#### 🧱 연도/구분별 용도 구성비")
+        yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
+        fig2 = px.bar(yr_grp1, x='연_구분', y='값', color='그룹', text_auto='.2s',
+                      category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
+        st.plotly_chart(fig2, use_container_width=True)
             
         st.markdown("##### 📋 전체량 상세 수치")
         piv1 = df_filt1.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
@@ -188,7 +192,10 @@ def render_simple_dashboard(df, unit):
     
     if selected_years_2 and selected_types_2:
         df_filt2 = df[df['연'].isin(selected_years_2) & df['구분'].isin(selected_types_2)]
-        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2)]
+        
+        # 🟢 [요청 반영] 1~3월 데이터만 있는 2026 (실적) 데이터를 2번 사진(하단) 파트에서 강제 제외
+        df_filt2 = df_filt2[df_filt2['연_구분'] != '2026 (실적)']
+        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2) and x != '2026 (실적)']
 
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
         
@@ -201,7 +208,6 @@ def render_simple_dashboard(df, unit):
         fig3.for_each_trace(lambda t: t.update(visible=True if '가정용' in t.name else 'legendonly'))
         st.plotly_chart(fig3, use_container_width=True)
         
-        # 🟢 [요청 반영] 용도별 표 역시 가로: 용도, 세로: 연도_구분으로 맞추고 맨 우측 총계 추가
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
         piv2 = df_filt2.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
         piv2 = piv2.reindex(index=filtered_x_labels_2, columns=[c for c in final_group_order if c in piv2.columns])
