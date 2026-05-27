@@ -147,24 +147,26 @@ def render_simple_dashboard(df, unit):
         df_filt1 = df[df['연'].isin(selected_years_1) & df['구분'].isin(selected_types_1)]
         filtered_x_labels_1 = [x for x in unique_x_labels if int(x[:4]) in selected_years_1 and any(t in x for t in selected_types_1)]
 
-        # 🟢 [요청 반영] 명확한 색상 구분을 위한 색상 강제 매핑 (값이 다르면 다른 색으로 보임)
         color_map = {}
         palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
         for i, lbl in enumerate(unique_x_labels):
             color_map[lbl] = palette[i % len(palette)]
 
-        # 🟢 [요청 반영] 좌우 분할(columns) 제거하고 위아래로 큼직하게 배치
         st.markdown("#### 📈 전체 월별 공급량 추이")
         mon_grp = df_filt1.groupby(['연_구분', '월'])['값'].sum().reset_index()
         fig1 = px.line(mon_grp, x='월', y='값', color='연_구분', markers=True, 
                        category_orders={"연_구분": filtered_x_labels_1},
-                       color_discrete_map=color_map) # 색상 고정 매핑 적용
+                       color_discrete_map=color_map)
         fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
         st.plotly_chart(fig1, use_container_width=True)
             
         st.markdown("#### 🧱 연도/구분별 용도 구성비")
         yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
-        fig2 = px.bar(yr_grp1, x='연_구분', y='값', color='그룹', text_auto='.2s',
+        
+        # 🟢 [요청 반영] 2026 (실적)은 1~3월만 있으므로 누적 막대그래프에서만 제외
+        yr_grp1_bar = yr_grp1[yr_grp1['연_구분'] != '2026 (실적)']
+        
+        fig2 = px.bar(yr_grp1_bar, x='연_구분', y='값', color='그룹', text_auto='.2s',
                       category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
         st.plotly_chart(fig2, use_container_width=True)
             
@@ -193,7 +195,6 @@ def render_simple_dashboard(df, unit):
     if selected_years_2 and selected_types_2:
         df_filt2 = df[df['연'].isin(selected_years_2) & df['구분'].isin(selected_types_2)]
         
-        # 🟢 [요청 반영] 1~3월 데이터만 있는 2026 (실적) 데이터를 2번 사진(하단) 파트에서 강제 제외
         df_filt2 = df_filt2[df_filt2['연_구분'] != '2026 (실적)']
         filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2) and x != '2026 (실적)']
 
