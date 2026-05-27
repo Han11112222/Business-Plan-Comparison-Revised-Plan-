@@ -158,16 +158,21 @@ def render_simple_dashboard(df, unit):
                        category_orders={"연_구분": filtered_x_labels_1},
                        color_discrete_map=color_map)
         fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
+        # 🟢 [요청 반영] 우측 상단 단위 추가
+        fig1.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
         st.plotly_chart(fig1, use_container_width=True)
             
         st.markdown("#### 🧱 연도/구분별 용도 구성비")
         yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
         
-        # 🟢 [요청 반영] 2026 (실적)은 1~3월만 있으므로 누적 막대그래프에서만 제외
         yr_grp1_bar = yr_grp1[yr_grp1['연_구분'] != '2026 (실적)']
+        # 🟢 [요청 반영] 2026(실적) 라벨 공간 자체를 X축에서 완전 소거하기 위한 필터링 정의
+        filtered_x_labels_1_bar = [x for x in filtered_x_labels_1 if x != '2026 (실적)']
         
         fig2 = px.bar(yr_grp1_bar, x='연_구분', y='값', color='그룹', text_auto='.2s',
-                      category_orders={"연_구분": filtered_x_labels_1, "그룹": final_group_order})
+                      category_orders={"연_구분": filtered_x_labels_1_bar, "그룹": final_group_order})
+        # 🟢 [요청 반영] 우측 상단 단위 추가
+        fig2.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
         st.plotly_chart(fig2, use_container_width=True)
             
         st.markdown("##### 📋 전체량 상세 수치")
@@ -175,6 +180,14 @@ def render_simple_dashboard(df, unit):
         piv1 = piv1.reindex(index=filtered_x_labels_1, columns=[c for c in final_group_order if c in piv1.columns])
         piv1['총계'] = piv1.sum(axis=1)
         st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
+        
+        # 🟢 [요청 반영] 전체량 표 하단 [세부 분석] 버튼 및 표 신설
+        if st.checkbox("🔍 세부 분석 (월별 용도별 전체량)", key="show_detail_1"):
+            st.markdown("##### 📅 월별 용도별 세부량")
+            piv1_detail = df_filt1.pivot_table(index=['연_구분', '월'], columns='그룹', values='값', aggfunc='sum').fillna(0)
+            piv1_detail = piv1_detail.reindex(columns=[c for c in final_group_order if c in piv1_detail.columns])
+            piv1_detail['총계'] = piv1_detail.sum(axis=1)
+            st.dataframe(piv1_detail.style.format("{:,.0f}"), use_container_width=True)
 
     st.markdown("---")
 
@@ -207,6 +220,8 @@ def render_simple_dashboard(df, unit):
         
         fig3.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
         fig3.for_each_trace(lambda t: t.update(visible=True if '가정용' in t.name else 'legendonly'))
+        # 🟢 [요청 반영] 우측 상단 단위 추가
+        fig3.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
         st.plotly_chart(fig3, use_container_width=True)
         
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
@@ -214,6 +229,14 @@ def render_simple_dashboard(df, unit):
         piv2 = piv2.reindex(index=filtered_x_labels_2, columns=[c for c in final_group_order if c in piv2.columns])
         piv2['총계'] = piv2.sum(axis=1)
         st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
+        
+        # 🟢 [요청 반영] 용도별 표 하단 [세부 분석] 버튼 및 표 신설
+        if st.checkbox("🔍 세부 분석 (월별 용도별 상세량)", key="show_detail_2"):
+            st.markdown("##### 📅 월별 용도별 세부량")
+            piv2_detail = df_filt2.pivot_table(index=['연_구분', '월'], columns='그룹', values='값', aggfunc='sum').fillna(0)
+            piv2_detail = piv2_detail.reindex(columns=[c for c in final_group_order if c in piv2_detail.columns])
+            piv2_detail['총계'] = piv2_detail.sum(axis=1)
+            st.dataframe(piv2_detail.style.format("{:,.0f}"), use_container_width=True)
 
 # ─────────────────────────────────────────────────────────
 # 🟢 5. 메인 실행
