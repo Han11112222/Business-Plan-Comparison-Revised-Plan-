@@ -132,26 +132,27 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             df_comp['값'] = df_comp['값'] / heating_value / 1000
             
         if not df_comp.empty:
-            # 상단 항목 선택 버튼 (전체 + 용도별) - 다중 선택(multiselect)으로 변경
+            # 상단 항목 선택 버튼 (전체 + 용도별) - 다시 단일 선택(selectbox)으로 복구
             options = ["전체"] + ORDER_LIST
-            selected_options = st.multiselect("📂 조회할 항목 선택", options=options, default=["전체"], key="ms_2026_comp")
+            selected_option = st.selectbox("📂 조회할 항목 선택", options=options, index=0, key="sb_2026_comp")
             
             # 선택된 항목에 따라 데이터 필터링
-            if not selected_options or "전체" in selected_options:
+            if selected_option == "전체":
                 df_filtered = df_comp
                 title_suffix = "전체량"
             else:
-                df_filtered = df_comp[df_comp['그룹'].isin(selected_options)]
-                title_suffix = ", ".join(selected_options)
+                df_filtered = df_comp[df_comp['그룹'] == selected_option]
+                title_suffix = selected_option
                 
             # 좌/우 분할 레이아웃 (3:7 비율로 수정)
             col_bar, col_line = st.columns([3, 7])
             
             with col_bar:
-                # 좌측: 연간 총합 막대그래프 - 텍스트 포맷을 GJ 원단위 그대로 표시 (,.0f)
+                # 좌측: 연간 총합 막대그래프 (텍스트 크기 1.5배 확대)
                 df_tot = df_filtered.groupby('구분_비교')['값'].sum().reset_index()
                 fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto=',.0f', color='구분_비교',
                                  color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
+                fig_bar.update_traces(textfont_size=18)  # 폰트 사이즈 키움
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
                 fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_bar, use_container_width=True)
@@ -204,14 +205,20 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                     else:
                         df_display.loc[idx, col] = f"{val:,.0f}"
             
-            # 데이터프레임 출력 시 우측 정렬 및 연간 총합 컬럼 배경 하이라이트 적용
+            # 구분을 컬럼으로 빼서 직접 하이라이트를 줄 수 있도록 리셋
+            df_display = df_display.reset_index()
+            
+            # 데이터프레임 스타일 지정
             styled_df = df_display.style.set_properties(**{'text-align': 'right'})
             
-            # 구분(index)과 헤더(header)는 Streamlit이 기본적으로 약간의 회색 하이라이트를 제공합니다.
-            # 추가로 연간 총합 열에 강조를 넣습니다.
-            styled_df = styled_df.set_properties(subset=['연간 총합'], **{'background-color': '#f0f2f6', 'font-weight': 'bold'})
+            # 구분 열(세로) 하이라이트: 연한 회색 및 가운데 정렬
+            styled_df = styled_df.set_properties(subset=['구분'], **{'background-color': '#f8f9fa', 'text-align': 'center', 'font-weight': 'bold'})
             
-            st.dataframe(styled_df, use_container_width=True)
+            # 연간 총합 열 하이라이트: 진한 회색
+            styled_df = styled_df.set_properties(subset=['연간 총합'], **{'background-color': '#e2e6ea', 'font-weight': 'bold'})
+            
+            # Streamlit 출력 (hide_index=True를 사용하여 깔끔하게 출력)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
     else:
         st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
