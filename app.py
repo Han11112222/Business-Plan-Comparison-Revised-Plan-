@@ -218,25 +218,14 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             # 스타일 적용
             styled_df = df_display.style.apply(custom_style, axis=1)
             
-            # 💡 Streamlit st.dataframe의 헤더 무시 한계를 극복하기 위해 HTML로 표 생성 및 렌더링
+            # 헤더(타이틀) 부분에도 동일한 배경색 적용 (연간 총합 및 구분 열 헤더)
             styled_df = styled_df.set_table_styles({
                 '구분': [{'selector': 'th', 'props': [('background-color', '#f8f9fa'), ('text-align', 'center')]}],
                 '연간 총합': [{'selector': 'th', 'props': [('background-color', '#e2e6ea'), ('text-align', 'right')]}],
             }, overwrite=False)
             
-            styled_df = styled_df.set_table_styles([
-                {'selector': 'th', 'props': [('border', '1px solid #e2e6ea'), ('padding', '8px'), ('color', '#31333F')]},
-                {'selector': 'td', 'props': [('border', '1px solid #e2e6ea'), ('padding', '8px'), ('color', '#31333F')]},
-            ], overwrite=False)
-            
-            try:
-                html_str = styled_df.hide(axis='index').to_html()
-            except:
-                html_str = styled_df.hide_index().to_html() # 구버전 판다스 호환
-                
-            html_str = html_str.replace('<table', '<table style="width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px;"')
-            
-            st.markdown(html_str, unsafe_allow_html=True)
+            # Streamlit 출력 (hide_index=True를 사용하여 깔끔하게 출력)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
     else:
         st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
