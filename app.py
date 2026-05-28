@@ -217,6 +217,12 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             # 연간 총합 열 하이라이트: 진한 회색
             styled_df = styled_df.set_properties(subset=['연간 총합'], **{'background-color': '#e2e6ea', 'font-weight': 'bold'})
             
+            # 헤더(타이틀) 부분에도 동일한 배경색 적용 (연간 총합 및 구분 열의 헤더)
+            styled_df = styled_df.set_table_styles({
+                '구분': [{'selector': 'th', 'props': [('background-color', '#f8f9fa')]}],
+                '연간 총합': [{'selector': 'th', 'props': [('background-color', '#e2e6ea')]}],
+            }, overwrite=False)
+            
             # Streamlit 출력 (hide_index=True를 사용하여 깔끔하게 출력)
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
