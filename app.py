@@ -91,8 +91,8 @@ def make_long_data(df, label):
 
     for col in df.columns:
         if col in exclude_cols: continue
-        # 소수점을 먼저 반올림하여 정수 기반으로 합산되도록 수정 (.round() 추가)
-        val_series = pd.to_numeric(df[col], errors='coerce').fillna(0).round()
+        # 오차 방지를 위해 개별 데이터의 반올림(round)을 제거하고 원본 그대로 더하게 만듦
+        val_series = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if val_series.sum() == 0: continue
 
         group = MAPPING_SUPPLY.get(col, col)
@@ -133,7 +133,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             df_comp['값'] = df_comp['값'] / heating_value / 1000
             
         if not df_comp.empty:
-            # 상단 항목 선택 버튼 (전체 + 용도별) - 다시 단일 선택(selectbox)으로 복구
+            # 상단 항목 선택 버튼 (전체 + 용도별)
             options = ["전체"] + ORDER_LIST
             selected_option = st.selectbox("📂 조회할 항목 선택", options=options, index=0, key="sb_2026_comp")
             
@@ -209,16 +209,16 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             # 구분을 컬럼으로 빼서 직접 하이라이트를 줄 수 있도록 리셋
             df_display = df_display.reset_index()
             
-            # 데이터프레임 스타일 지정
-            styled_df = df_display.style.set_properties(**{'text-align': 'right'})
+            # 💡 연간 총합 열과 구분 열에 확실하게 배경색을 적용하기 위한 스타일 함수
+            def custom_style(row):
+                return ['background-color: #f8f9fa; text-align: center; font-weight: bold;' if col == '구분' 
+                        else 'background-color: #e2e6ea; font-weight: bold; text-align: right;' if col == '연간 총합' 
+                        else 'text-align: right;' for col in row.index]
+
+            # 스타일 적용
+            styled_df = df_display.style.apply(custom_style, axis=1)
             
-            # 구분 열(세로) 하이라이트: 연한 회색 및 가운데 정렬
-            styled_df = styled_df.set_properties(subset=['구분'], **{'background-color': '#f8f9fa', 'text-align': 'center', 'font-weight': 'bold'})
-            
-            # 연간 총합 열 하이라이트: 진한 회색
-            styled_df = styled_df.set_properties(subset=['연간 총합'], **{'background-color': '#e2e6ea', 'font-weight': 'bold'})
-            
-            # 헤더(타이틀) 부분에도 동일한 배경색 적용 (연간 총합 및 구분 열의 헤더)
+            # 헤더(타이틀) 부분에도 동일한 배경색 적용
             styled_df = styled_df.set_table_styles({
                 '구분': [{'selector': 'th', 'props': [('background-color', '#f8f9fa')]}],
                 '연간 총합': [{'selector': 'th', 'props': [('background-color', '#e2e6ea')]}],
