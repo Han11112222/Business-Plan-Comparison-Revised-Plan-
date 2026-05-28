@@ -109,8 +109,61 @@ def make_long_data(df, label):
 # ─────────────────────────────────────────────────────────
 # 🟢 4. 심플 대시보드 렌더링
 # ─────────────────────────────────────────────────────────
-def render_simple_dashboard(df, unit):
+def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_value=42.563):
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
+    
+    # ==========================================
+    # 0️⃣ [요청 반영] 2026년 온전한 계획 vs 예상 실적 비교
+    # ==========================================
+    st.markdown("### 0️⃣ 2026년 계획 vs 예상 실적 비교 (온전한 1~12월)")
+    
+    if long_plan is not None and long_action is not None and not long_plan.empty and not long_action.empty:
+        df_p2026 = long_plan[long_plan['연'] == 2026].copy()
+        df_a2026 = long_action[long_action['연'] == 2026].copy()
+        
+        df_p2026['구분_비교'] = "계획"
+        df_a2026['구분_비교'] = "예상 실적"
+        
+        df_comp = pd.concat([df_p2026, df_a2026], ignore_index=True)
+        
+        if "GJ" in unit:
+            df_comp['값'] = df_comp['값'] / 1000
+        elif "부피" in unit:
+            df_comp['값'] = df_comp['값'] / heating_value / 1000
+            
+        if not df_comp.empty:
+            if st.toggle("🔍 용도별 상세 활성화", key="toggle_2026_comp"):
+                selected_grp = st.selectbox("📂 상세 조회할 용도 선택", options=ORDER_LIST, index=0, key="sb_2026_comp")
+                df_comp_filtered = df_comp[df_comp['그룹'] == selected_grp]
+                
+                # 용도별 연간 전체값 막대그래프
+                df_tot = df_comp_filtered.groupby('구분_비교')['값'].sum().reset_index()
+                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto='.2s', color='구분_비교',
+                                 color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
+                fig_bar.update_layout(title=f"2026년 {selected_grp} 연간 전체 계획 vs 예상 실적", showlegend=False)
+                fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+                st.plotly_chart(fig_bar, use_container_width=True)
+                
+                # 막대그래프 하단 월별 꺾은선그래프
+                df_mon = df_comp_filtered.groupby(['구분_비교', '월'])['값'].sum().reset_index().sort_values('월')
+                fig_line = px.line(df_mon, x='월', y='값', color='구분_비교', markers=True,
+                                   color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
+                fig_line.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
+                fig_line.update_layout(title=f"2026년 {selected_grp} 월별 추이 비교")
+                fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+                st.plotly_chart(fig_line, use_container_width=True)
+            else:
+                # 전체량 막대그래프
+                df_tot = df_comp.groupby('구분_비교')['값'].sum().reset_index()
+                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto='.2s', color='구분_비교',
+                                 color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
+                fig_bar.update_layout(title="2026년 전체량 계획 vs 예상 실적", showlegend=False)
+                fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+                st.plotly_chart(fig_bar, use_container_width=True)
+    else:
+        st.info("💡 2026년 온전한 계획 및 예상 실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
+
+    st.markdown("---")
     
     df['연'] = df['연'].astype(int)
     
@@ -127,8 +180,6 @@ def render_simple_dashboard(df, unit):
     final_group_order = valid_order + sorted(rest_groups)
 
     years = sorted(df['연'].unique().tolist())
-
-    st.markdown("---")
     
     # ==========================================
     # 1️⃣ 상단: 전체량 분석
@@ -178,7 +229,6 @@ def render_simple_dashboard(df, unit):
         piv1['총계'] = piv1.sum(axis=1)
         st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
         
-        # 🟢 [요청 반영] 세부 분석 버튼을 토글(스위치) 모양으로 변경
         if st.toggle("🔍 세부 분석 (월별 용도별 전체량)", key="show_detail_1"):
             st.markdown("##### 📅 월별 용도별 세부량")
             piv1_detail = df_filt1.pivot_table(index=['연_구분', '월'], columns='그룹', values='값', aggfunc='sum').fillna(0)
@@ -226,7 +276,6 @@ def render_simple_dashboard(df, unit):
         piv2['총계'] = piv2.sum(axis=1)
         st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
         
-        # 🟢 [요청 반영] 세부 분석 버튼을 토글(스위치) 모양으로 변경
         if st.toggle("🔍 세부 분석 (월별 용도별 상세량)", key="show_detail_2"):
             st.markdown("##### 📅 월별 용도별 세부량")
             piv2_detail = df_filt2.pivot_table(index=['연_구분', '월'], columns='그룹', values='값', aggfunc='sum').fillna(0)
@@ -307,7 +356,8 @@ def main():
             elif "부피" in unit:
                 df_final['값'] = df_final['값'] / heating_value / 1000
                 
-            render_simple_dashboard(df_final, unit)
+            # 🟢 [요청 반영] 0️⃣번 섹션을 위한 순수 계획/실천계획 데이터와 함께 함수 호출
+            render_simple_dashboard(df_final, unit, long_plan=long_plan, long_action=long_action, heating_value=heating_value)
         else:
             st.warning("⚠️ 유효한 실적 데이터를 추출하지 못했습니다. 파일 구조를 확인해주세요.")
     else:
