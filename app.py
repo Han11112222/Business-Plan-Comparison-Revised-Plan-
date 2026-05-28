@@ -132,25 +132,25 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             df_comp['값'] = df_comp['값'] / heating_value / 1000
             
         if not df_comp.empty:
-            # 상단 항목 선택 버튼 (전체 + 용도별)
+            # 상단 항목 선택 버튼 (전체 + 용도별) - 다중 선택(multiselect)으로 변경
             options = ["전체"] + ORDER_LIST
-            selected_option = st.selectbox("📂 조회할 항목 선택", options=options, index=0, key="sb_2026_comp")
+            selected_options = st.multiselect("📂 조회할 항목 선택", options=options, default=["전체"], key="ms_2026_comp")
             
             # 선택된 항목에 따라 데이터 필터링
-            if selected_option == "전체":
+            if not selected_options or "전체" in selected_options:
                 df_filtered = df_comp
                 title_suffix = "전체량"
             else:
-                df_filtered = df_comp[df_comp['그룹'] == selected_option]
-                title_suffix = selected_option
+                df_filtered = df_comp[df_comp['그룹'].isin(selected_options)]
+                title_suffix = ", ".join(selected_options)
                 
             # 좌/우 분할 레이아웃 (3:7 비율로 수정)
             col_bar, col_line = st.columns([3, 7])
             
             with col_bar:
-                # 좌측: 연간 총합 막대그래프
+                # 좌측: 연간 총합 막대그래프 - 텍스트 포맷을 GJ 원단위 그대로 표시 (,.0f)
                 df_tot = df_filtered.groupby('구분_비교')['값'].sum().reset_index()
-                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto='.2s', color='구분_비교',
+                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto=',.0f', color='구분_비교',
                                  color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
                 fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
@@ -166,7 +166,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_line, use_container_width=True)
             
-            # --- 하단 데이터 표 (박스) 추가 ---
+            # --- 하단 데이터 표 (박스) ---
             st.markdown("##### 📋 세부 수치")
             
             # 피벗 테이블 생성 (구분_비교 vs 월)
@@ -204,8 +204,14 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                     else:
                         df_display.loc[idx, col] = f"{val:,.0f}"
             
-            # 데이터프레임 출력
-            st.dataframe(df_display, use_container_width=True)
+            # 데이터프레임 출력 시 우측 정렬 및 연간 총합 컬럼 배경 하이라이트 적용
+            styled_df = df_display.style.set_properties(**{'text-align': 'right'})
+            
+            # 구분(index)과 헤더(header)는 Streamlit이 기본적으로 약간의 회색 하이라이트를 제공합니다.
+            # 추가로 연간 총합 열에 강조를 넣습니다.
+            styled_df = styled_df.set_properties(subset=['연간 총합'], **{'background-color': '#f0f2f6', 'font-weight': 'bold'})
+            
+            st.dataframe(styled_df, use_container_width=True)
 
     else:
         st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
@@ -214,7 +220,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     
     df['연'] = df['연'].astype(int)
     
-    order_dict = {"실적": 1, "기존계획량": 2, "실천계획량": 3}
+    order_dict = {"실적": 1, "계획": 2, "예상실적": 3}
     df['sort_key'] = df['연'] * 10 + df['구분'].map(order_dict)
     df = df.sort_values(['sort_key', '월'])
     
@@ -239,7 +245,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     with col_y1:
         selected_years_1 = st.multiselect("📅 [전체량] 조회할 연도 선택", options=years, default=default_years_1, key="sec1")
     with col_t1:
-        selected_types_1 = st.multiselect("📊 [전체량] 조회할 구분 선택", options=["실적", "기존계획량", "실천계획량"], default=["실적", "기존계획량", "실천계획량"], key="type_sec1")
+        selected_types_1 = st.multiselect("📊 [전체량] 조회할 구분 선택", options=["실적", "계획", "예상실적"], default=["실적", "계획", "예상실적"], key="type_sec1")
     
     if selected_years_1 and selected_types_1:
         df_filt1 = df[df['연'].isin(selected_years_1) & df['구분'].isin(selected_types_1)]
@@ -297,7 +303,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     with col_y2:
         selected_years_2 = st.multiselect("📅 [용도별] 조회할 연도 선택", options=years, default=default_years_2, key="sec2")
     with col_t2:
-        selected_types_2 = st.multiselect("📊 [용도별] 조회할 구분 선택", options=["실적", "기존계획량", "실천계획량"], default=["실적", "기존계획량", "실천계획량"], key="type_sec2")
+        selected_types_2 = st.multiselect("📊 [용도별] 조회할 구분 선택", options=["실적", "계획", "예상실적"], default=["실적", "계획", "예상실적"], key="type_sec2")
     
     if selected_years_2 and selected_types_2:
         df_filt2 = df[df['연'].isin(selected_years_2) & df['구분'].isin(selected_types_2)]
@@ -372,8 +378,8 @@ def main():
         if df_action is None and len(data_dict) >= 3: df_action = list(data_dict.values())[2]
         
         long_act = make_long_data(df_act, "실적") if df_act is not None else pd.DataFrame()
-        long_plan = make_long_data(df_plan, "기존계획량") if df_plan is not None else pd.DataFrame()
-        long_action = make_long_data(df_action, "실천계획량") if df_action is not None else pd.DataFrame()
+        long_plan = make_long_data(df_plan, "계획") if df_plan is not None else pd.DataFrame()
+        long_action = make_long_data(df_action, "예상실적") if df_action is not None else pd.DataFrame()
         
         if not long_act.empty:
             df_hist = long_act[long_act['연'] < 2026]
@@ -381,16 +387,16 @@ def main():
             
             df_plan_2026_apr_dec = long_plan[(long_plan['연'] == 2026) & (long_plan['월'] >= 4)]
             df_plan_2026_jan_mar = df_act_2026.copy()
-            df_plan_2026_jan_mar['구분'] = "기존계획량"
+            df_plan_2026_jan_mar['구분'] = "계획"
             df_plan_2026_apr_dec = df_plan_2026_apr_dec.copy()
-            df_plan_2026_apr_dec['구분'] = "기존계획량"
+            df_plan_2026_apr_dec['구분'] = "계획"
             df_plan_2026 = pd.concat([df_plan_2026_jan_mar, df_plan_2026_apr_dec], ignore_index=True)
             
             df_action_2026_apr_dec = long_action[(long_action['연'] == 2026) & (long_action['월'] >= 4)]
             df_action_2026_jan_mar = df_act_2026.copy()
-            df_action_2026_jan_mar['구분'] = "실천계획량"
+            df_action_2026_jan_mar['구분'] = "예상실적"
             df_action_2026_apr_dec = df_action_2026_apr_dec.copy()
-            df_action_2026_apr_dec['구분'] = "실천계획량"
+            df_action_2026_apr_dec['구분'] = "예상실적"
             df_action_2026 = pd.concat([df_action_2026_jan_mar, df_action_2026_apr_dec], ignore_index=True)
             
             df_final = pd.concat([df_hist, df_act_2026, df_plan_2026, df_action_2026], ignore_index=True)
