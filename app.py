@@ -113,16 +113,16 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
     # ==========================================
-    # 0️⃣ 2026년 계획 vs 예상 실적 비교 (온전한 1~12월)
+    # 0️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)
     # ==========================================
-    st.markdown("### 0️⃣ 2026년 계획 vs 예상 실적 비교 (온전한 1~12월)")
+    st.markdown("### 0️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)")
     
     if long_plan is not None and long_action is not None and not long_plan.empty and not long_action.empty:
         df_p2026 = long_plan[long_plan['연'] == 2026].copy()
         df_a2026 = long_action[long_action['연'] == 2026].copy()
         
         df_p2026['구분_비교'] = "계획"
-        df_a2026['구분_비교'] = "예상 실적"
+        df_a2026['구분_비교'] = "예상실적"
         
         df_comp = pd.concat([df_p2026, df_a2026], ignore_index=True)
         
@@ -144,14 +144,14 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 df_filtered = df_comp[df_comp['그룹'] == selected_option]
                 title_suffix = selected_option
                 
-            # 좌/우 분할 레이아웃
-            col_bar, col_line = st.columns(2)
+            # 좌/우 분할 레이아웃 (3:7 비율로 수정)
+            col_bar, col_line = st.columns([3, 7])
             
             with col_bar:
                 # 좌측: 연간 총합 막대그래프
                 df_tot = df_filtered.groupby('구분_비교')['값'].sum().reset_index()
                 fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto='.2s', color='구분_비교',
-                                 color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
+                                 color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
                 fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_bar, use_container_width=True)
@@ -160,13 +160,13 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 # 우측: 월별 추이 꺾은선그래프
                 df_mon = df_filtered.groupby(['구분_비교', '월'])['값'].sum().reset_index().sort_values('월')
                 fig_line = px.line(df_mon, x='월', y='값', color='구분_비교', markers=True,
-                                   color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
+                                   color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_line.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
                 fig_line.update_layout(title=f"2026년 {title_suffix} 월별 추이")
                 fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_line, use_container_width=True)
     else:
-        st.info("💡 2026년 온전한 계획 및 예상 실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
+        st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
 
     st.markdown("---")
     
