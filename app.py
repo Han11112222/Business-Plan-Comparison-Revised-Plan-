@@ -180,14 +180,32 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             # 연간 총합 컬럼 추가
             df_table['연간 총합'] = df_table.sum(axis=1)
             
-            # 인덱스 순서 고정 (계획을 위로)
+            # 인덱스 순서 고정 및 증감/대비 계산
             if '계획' in df_table.index and '예상실적' in df_table.index:
                 df_table = df_table.reindex(['계획', '예상실적'])
                 
+                # 증감 추가
+                df_table.loc['증감'] = df_table.loc['예상실적'] - df_table.loc['계획']
+                
+                # 대비 추가 (계획이 0이 아닐 때만 계산)
+                df_table.loc['대비'] = 0.0
+                mask = df_table.loc['계획'] != 0
+                df_table.loc['대비', mask] = (df_table.loc['예상실적', mask] / df_table.loc['계획', mask]) * 100
+                
             df_table.index.name = "구분"
             
+            # 행별 포맷팅을 위한 문자열 변환 (대비는 %, 나머지는 정수 콤마)
+            df_display = df_table.copy().astype(object)
+            for col in df_display.columns:
+                for idx in df_display.index:
+                    val = df_table.loc[idx, col]
+                    if idx == '대비':
+                        df_display.loc[idx, col] = f"{val:,.1f}%"
+                    else:
+                        df_display.loc[idx, col] = f"{val:,.0f}"
+            
             # 데이터프레임 출력
-            st.dataframe(df_table.style.format("{:,.0f}"), use_container_width=True)
+            st.dataframe(df_display, use_container_width=True)
 
     else:
         st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
