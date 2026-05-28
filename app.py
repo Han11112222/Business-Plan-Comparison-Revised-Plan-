@@ -113,9 +113,9 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
     # ==========================================
-    # 0️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)
+    # 1️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)
     # ==========================================
-    st.markdown("### 0️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)")
+    st.markdown("### 1️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)")
     
     if long_plan is not None and long_action is not None and not long_plan.empty and not long_action.empty:
         df_p2026 = long_plan[long_plan['연'] == 2026].copy()
@@ -165,6 +165,30 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 fig_line.update_layout(title=f"2026년 {title_suffix} 월별 추이")
                 fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_line, use_container_width=True)
+            
+            # --- 하단 데이터 표 (박스) 추가 ---
+            st.markdown("##### 📋 세부 수치")
+            
+            # 피벗 테이블 생성 (구분_비교 vs 월)
+            df_table = df_filtered.pivot_table(index='구분_비교', columns='월', values='값', aggfunc='sum').fillna(0)
+            
+            # 월 컬럼명 변경 (1 -> 1월)
+            month_cols = [m for m in range(1, 13) if m in df_table.columns]
+            df_table = df_table[month_cols] # 순서 보장
+            df_table.rename(columns={m: f"{m}월" for m in month_cols}, inplace=True)
+            
+            # 연간 총합 컬럼 추가
+            df_table['연간 총합'] = df_table.sum(axis=1)
+            
+            # 인덱스 순서 고정 (계획을 위로)
+            if '계획' in df_table.index and '예상실적' in df_table.index:
+                df_table = df_table.reindex(['계획', '예상실적'])
+                
+            df_table.index.name = "구분"
+            
+            # 데이터프레임 출력
+            st.dataframe(df_table.style.format("{:,.0f}"), use_container_width=True)
+
     else:
         st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
 
@@ -187,9 +211,9 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     years = sorted(df['연'].unique().tolist())
     
     # ==========================================
-    # 1️⃣ 상단: 전체량 분석
+    # 2️⃣ 중간: 전체량 분석
     # ==========================================
-    st.markdown("### 1️⃣ 전체량 분석")
+    st.markdown("### 2️⃣ 전체량 분석")
     
     default_years_1 = years[-5:] if len(years) >= 5 else years
     
@@ -244,9 +268,9 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     st.markdown("---")
 
     # ==========================================
-    # 2️⃣ 하단: 용도별 분석
+    # 3️⃣ 하단: 용도별 분석
     # ==========================================
-    st.markdown("### 2️⃣ 용도별 구성 분석")
+    st.markdown("### 3️⃣ 용도별 구성 분석")
     
     default_years_2 = [y for y in years if y in [2025, 2026]]
     if not default_years_2: default_years_2 = years[-2:] if len(years) >= 2 else years
