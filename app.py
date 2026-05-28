@@ -113,7 +113,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
     # ==========================================
-    # 0️⃣ [요청 반영] 2026년 온전한 계획 vs 예상 실적 비교
+    # 0️⃣ 2026년 계획 vs 예상 실적 비교 (온전한 1~12월)
     # ==========================================
     st.markdown("### 0️⃣ 2026년 계획 vs 예상 실적 비교 (온전한 1~12월)")
     
@@ -132,34 +132,39 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             df_comp['값'] = df_comp['값'] / heating_value / 1000
             
         if not df_comp.empty:
-            if st.toggle("🔍 용도별 상세 활성화", key="toggle_2026_comp"):
-                selected_grp = st.selectbox("📂 상세 조회할 용도 선택", options=ORDER_LIST, index=0, key="sb_2026_comp")
-                df_comp_filtered = df_comp[df_comp['그룹'] == selected_grp]
+            # 상단 항목 선택 버튼 (전체 + 용도별)
+            options = ["전체"] + ORDER_LIST
+            selected_option = st.selectbox("📂 조회할 항목 선택", options=options, index=0, key="sb_2026_comp")
+            
+            # 선택된 항목에 따라 데이터 필터링
+            if selected_option == "전체":
+                df_filtered = df_comp
+                title_suffix = "전체량"
+            else:
+                df_filtered = df_comp[df_comp['그룹'] == selected_option]
+                title_suffix = selected_option
                 
-                # 용도별 연간 전체값 막대그래프
-                df_tot = df_comp_filtered.groupby('구분_비교')['값'].sum().reset_index()
+            # 좌/우 분할 레이아웃
+            col_bar, col_line = st.columns(2)
+            
+            with col_bar:
+                # 좌측: 연간 총합 막대그래프
+                df_tot = df_filtered.groupby('구분_비교')['값'].sum().reset_index()
                 fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto='.2s', color='구분_비교',
                                  color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
-                fig_bar.update_layout(title=f"2026년 {selected_grp} 연간 전체 계획 vs 예상 실적", showlegend=False)
+                fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
                 fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_bar, use_container_width=True)
                 
-                # 막대그래프 하단 월별 꺾은선그래프
-                df_mon = df_comp_filtered.groupby(['구분_비교', '월'])['값'].sum().reset_index().sort_values('월')
+            with col_line:
+                # 우측: 월별 추이 꺾은선그래프
+                df_mon = df_filtered.groupby(['구분_비교', '월'])['값'].sum().reset_index().sort_values('월')
                 fig_line = px.line(df_mon, x='월', y='값', color='구분_비교', markers=True,
                                    color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
                 fig_line.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-                fig_line.update_layout(title=f"2026년 {selected_grp} 월별 추이 비교")
+                fig_line.update_layout(title=f"2026년 {title_suffix} 월별 추이")
                 fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_line, use_container_width=True)
-            else:
-                # 전체량 막대그래프
-                df_tot = df_comp.groupby('구분_비교')['값'].sum().reset_index()
-                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto='.2s', color='구분_비교',
-                                 color_discrete_map={"계획": "#1f77b4", "예상 실적": "#ff7f0e"})
-                fig_bar.update_layout(title="2026년 전체량 계획 vs 예상 실적", showlegend=False)
-                fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
-                st.plotly_chart(fig_bar, use_container_width=True)
     else:
         st.info("💡 2026년 온전한 계획 및 예상 실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
 
@@ -356,7 +361,6 @@ def main():
             elif "부피" in unit:
                 df_final['값'] = df_final['값'] / heating_value / 1000
                 
-            # 🟢 [요청 반영] 0️⃣번 섹션을 위한 순수 계획/실천계획 데이터와 함께 함수 호출
             render_simple_dashboard(df_final, unit, long_plan=long_plan, long_action=long_action, heating_value=heating_value)
         else:
             st.warning("⚠️ 유효한 실적 데이터를 추출하지 못했습니다. 파일 구조를 확인해주세요.")
