@@ -91,7 +91,8 @@ def make_long_data(df, label):
 
     for col in df.columns:
         if col in exclude_cols: continue
-        val_series = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        # 소수점을 먼저 반올림하여 정수 기반으로 합산되도록 수정 (.round() 추가)
+        val_series = pd.to_numeric(df[col], errors='coerce').fillna(0).round()
         if val_series.sum() == 0: continue
 
         group = MAPPING_SUPPLY.get(col, col)
