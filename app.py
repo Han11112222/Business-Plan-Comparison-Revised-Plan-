@@ -304,7 +304,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 showarrow=False,
                 yanchor="bottom", # 텍스트 하단 기준점
                 yshift=15,        # 겹치지 않게 위로 충분히 띄움
-                font=dict(size=14, color="black")
+                font=dict(size=14, color="blue") # 상단 텍스트 색상을 푸른색(blue)으로 수정
             )
             
         fig2.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
