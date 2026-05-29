@@ -349,19 +349,31 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         
         filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2)]
 
+        # 👉 상단 용도 버튼 추가 부분
+        selected_group = st.radio("📂 조회할 용도 선택", options=final_group_order, index=0, horizontal=True, key="rb_group_sec3")
+
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
         
-        sec2_mon_grp = df_filt2.groupby(['연_구분', '그룹', '월'])['값'].sum().reset_index()
+        # 👉 선택한 용도 1개로 그래프용 데이터 필터링
+        df_fig3 = df_filt2[df_filt2['그룹'] == selected_group]
+        sec2_mon_grp = df_fig3.groupby(['연_구분', '월'])['값'].sum().reset_index()
         
-        fig3 = px.line(sec2_mon_grp, x='월', y='값', color='그룹', line_dash='연_구분', markers=True,
-                       category_orders={"연_구분": filtered_x_labels_2, "그룹": final_group_order})
+        # 전체 꺾은선 추이와 색상 통일감 유지
+        color_map = {}
+        palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
+        for i, lbl in enumerate(unique_x_labels):
+            color_map[lbl] = palette[i % len(palette)]
+        
+        fig3 = px.line(sec2_mon_grp, x='월', y='값', color='연_구분', markers=True,
+                       category_orders={"연_구분": filtered_x_labels_2},
+                       color_discrete_map=color_map)
         
         fig3.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        fig3.for_each_trace(lambda t: t.update(visible=True if '가정용' in t.name else 'legendonly'))
         fig3.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
         st.plotly_chart(fig3, use_container_width=True)
         
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
+        # 표는 기존처럼 모든 용도를 보여주도록 유지
         piv2 = df_filt2.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
         piv2 = piv2.reindex(index=filtered_x_labels_2, columns=[c for c in final_group_order if c in piv2.columns])
         piv2['총계'] = piv2.sum(axis=1)
