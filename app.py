@@ -114,9 +114,9 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
     # ==========================================
-    # 1️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)
+    # 1️⃣ 2026년 계획 vs 예상실적 비교
     # ==========================================
-    st.markdown("### 1️⃣ 2026년 계획 vs 예상실적 비교 (온전한 1~12월)")
+    st.markdown("### 1️⃣ 2026년 계획 vs 예상실적 비교")
     
     if long_plan is not None and long_action is not None and not long_plan.empty and not long_action.empty:
         df_p2026 = long_plan[long_plan['연'] == 2026].copy()
@@ -209,26 +209,30 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             # 구분을 컬럼으로 빼서 직접 하이라이트를 줄 수 있도록 리셋
             df_display = df_display.reset_index()
             
-            # 💡 연간 총합 열과 구분 열에 확실하게 배경색을 적용하기 위한 스타일 함수
-            def custom_style(row):
-                return ['background-color: #f8f9fa; text-align: center; font-weight: bold;' if col == '구분' 
-                        else 'background-color: #e2e6ea; font-weight: bold; text-align: right;' if col == '연간 총합' 
-                        else 'text-align: right;' for col in row.index]
-
-            # 스타일 적용
-            styled_df = df_display.style.apply(custom_style, axis=1)
+            # 스타일을 CSS로 완전 제어하기 위해 기본 텍스트 정렬만 파이썬에서 지정
+            styled_df = df_display.style.set_properties(**{'text-align': 'right'})
             
-            # 헤더(타이틀) 부분에도 동일한 배경색 적용 (연간 총합 및 구분 열 헤더)
-            styled_df = styled_df.set_table_styles({
-                '구분': [{'selector': 'th', 'props': [('background-color', '#f8f9fa'), ('text-align', 'center')]}],
-                '연간 총합': [{'selector': 'th', 'props': [('background-color', '#e2e6ea'), ('text-align', 'right')]}],
-            }, overwrite=False)
-            
-            # Streamlit 출력 (hide_index=True를 사용하여 깔끔하게 출력)
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            try:
+                html_str = styled_df.hide(axis='index').to_html()
+            except:
+                html_str = styled_df.hide_index().to_html() # 구버전 판다스 호환
+                
+            custom_css = """
+            <style>
+                .custom-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; }
+                .custom-table th, .custom-table td { border: 1px solid #e2e6ea; padding: 8px; color: #31333F; }
+                .custom-table th { background-color: #ffffff; }
+                /* 구분 (첫 번째 열) 강제 하이라이트 */
+                .custom-table th:first-child, .custom-table td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
+                /* 연간 총합 (마지막 열) 강제 하이라이트 */
+                .custom-table th:last-child, .custom-table td:last-child { background-color: #e2e6ea !important; text-align: right !important; font-weight: bold !important; }
+            </style>
+            """
+            st.markdown(f'<div class="custom-table">{html_str}</div>', unsafe_allow_html=True)
+            st.markdown(custom_css, unsafe_allow_html=True)
 
     else:
-        st.info("💡 2026년 온전한 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
+        st.info("💡 2026년 계획 및 예상실적 비교를 위해 '공급량_사업계획' 및 '공급량_실천사업계획' 데이터를 분석하고 있습니다.")
 
     st.markdown("---")
     
@@ -354,7 +358,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 # 🟢 5. 메인 실행
 # ─────────────────────────────────────────────────────────
 def main():
-    st.title("🔥 도시가스 공급량 심플 분석")
+    st.title("🔥 2026년 DSE 예상실적(실천사업계획)비교분석")
     
     with st.sidebar:
         st.header("⚙️ 기본 설정")
