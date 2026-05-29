@@ -420,24 +420,8 @@ def main():
         long_action = make_long_data(df_action, "예상실적") if df_action is not None else pd.DataFrame()
         
         if not long_act.empty:
-            df_hist = long_act[long_act['연'] < 2026]
-            df_act_2026 = long_act[(long_act['연'] == 2026) & (long_act['월'] <= 3)]
-            
-            df_plan_2026_apr_dec = long_plan[(long_plan['연'] == 2026) & (long_plan['월'] >= 4)]
-            df_plan_2026_jan_mar = df_act_2026.copy()
-            df_plan_2026_jan_mar['구분'] = "계획"
-            df_plan_2026_apr_dec = df_plan_2026_apr_dec.copy()
-            df_plan_2026_apr_dec['구분'] = "계획"
-            df_plan_2026 = pd.concat([df_plan_2026_jan_mar, df_plan_2026_apr_dec], ignore_index=True)
-            
-            df_action_2026_apr_dec = long_action[(long_action['연'] == 2026) & (long_action['월'] >= 4)]
-            df_action_2026_jan_mar = df_act_2026.copy()
-            df_action_2026_jan_mar['구분'] = "예상실적"
-            df_action_2026_apr_dec = df_action_2026_apr_dec.copy()
-            df_action_2026_apr_dec['구분'] = "예상실적"
-            df_action_2026 = pd.concat([df_action_2026_jan_mar, df_action_2026_apr_dec], ignore_index=True)
-            
-            df_final = pd.concat([df_hist, df_act_2026, df_plan_2026, df_action_2026], ignore_index=True)
+            # 원본 데이터 그대로 병합(강제 덮어쓰기 로직 제거)
+            df_final = pd.concat([long_act, long_plan, long_action], ignore_index=True)
             
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
