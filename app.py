@@ -347,8 +347,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     if selected_years_2 and selected_types_2:
         df_filt2 = df[df['연'].isin(selected_years_2) & df['구분'].isin(selected_types_2)]
         
-        df_filt2 = df_filt2[df_filt2['연_구분'] != '2026 (실적)']
-        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2) and x != '2026 (실적)']
+        filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2)]
 
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
         
@@ -452,7 +451,7 @@ def main():
         else:
             st.warning("⚠️ 유효한 실적 데이터를 추출하지 못했습니다. 파일 구조를 확인해주세요.")
     else:
-        st.info("👈 좌측 사이드바에서 공급량 파일을 업로드하거나, 프로젝트 단 폴더 내에 공급량실적_계획_실적_MJ.xlsx 파일을 배치해 주세요.")
+        st.info("👈 좌측 사이드바에서 공급량 파일을 업로드하거나, 프로젝트 폴더 내에 공급량실적_계획_실적_MJ.xlsx 파일을 배치해 주세요.")
 
 if __name__ == "__main__":
     main()
