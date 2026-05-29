@@ -327,13 +327,6 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         piv1 = piv1.reindex(index=filtered_x_labels_1, columns=[c for c in final_group_order if c in piv1.columns])
         piv1['총계'] = piv1.sum(axis=1)
         st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
-        
-        if st.toggle("🔍 세부 분석 (월별 용도별 전체량)", key="show_detail_1"):
-            st.markdown("##### 📅 월별 용도별 세부량")
-            piv1_detail = df_filt1.pivot_table(index=['연_구분', '월'], columns='그룹', values='값', aggfunc='sum').fillna(0)
-            piv1_detail = piv1_detail.reindex(columns=[c for c in final_group_order if c in piv1_detail.columns])
-            piv1_detail['총계'] = piv1_detail.sum(axis=1)
-            st.dataframe(piv1_detail.style.format("{:,.0f}"), use_container_width=True)
 
     st.markdown("---")
 
@@ -459,7 +452,7 @@ def main():
         else:
             st.warning("⚠️ 유효한 실적 데이터를 추출하지 못했습니다. 파일 구조를 확인해주세요.")
     else:
-        st.info("👈 좌측 사이드바에서 공급량 파일을 업로드하거나, 프로젝트 폴더 내에 공급량실적_계획_실적_MJ.xlsx 파일을 배치해 주세요.")
+        st.info("👈 좌측 사이드바에서 공급량 파일을 업로드하거나, 프로젝트 단 폴더 내에 공급량실적_계획_실적_MJ.xlsx 파일을 배치해 주세요.")
 
 if __name__ == "__main__":
     main()
