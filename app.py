@@ -286,8 +286,9 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         st.markdown("#### 🧱 연도/구분별 용도 구성비")
         yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
         
-        yr_grp1_bar = yr_grp1[yr_grp1['연_구분'] != '2026 (실적)']
-        filtered_x_labels_1_bar = [x for x in filtered_x_labels_1 if x != '2026 (실적)']
+        # 2026(실적)과 2026(계획) 제외
+        yr_grp1_bar = yr_grp1[~yr_grp1['연_구분'].isin(['2026 (실적)', '2026 (계획)'])]
+        filtered_x_labels_1_bar = [x for x in filtered_x_labels_1 if x not in ['2026 (실적)', '2026 (계획)']]
         
         # 내부 수치를 M 단위가 아닌 원단위(,.0f)로 변경
         fig2 = px.bar(yr_grp1_bar, x='연_구분', y='값', color='그룹', text_auto=',.0f',
@@ -301,7 +302,8 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 y=row['값'],
                 text=f"{row['값']:,.0f}",
                 showarrow=False,
-                yshift=10,
+                yanchor="bottom", # 텍스트 하단 기준점
+                yshift=15,        # 겹치지 않게 위로 충분히 띄움
                 font=dict(size=14, color="black")
             )
             
