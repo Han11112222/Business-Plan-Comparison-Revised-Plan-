@@ -289,8 +289,22 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         yr_grp1_bar = yr_grp1[yr_grp1['연_구분'] != '2026 (실적)']
         filtered_x_labels_1_bar = [x for x in filtered_x_labels_1 if x != '2026 (실적)']
         
-        fig2 = px.bar(yr_grp1_bar, x='연_구분', y='값', color='그룹', text_auto='.2s',
+        # 내부 수치를 M 단위가 아닌 원단위(,.0f)로 변경
+        fig2 = px.bar(yr_grp1_bar, x='연_구분', y='값', color='그룹', text_auto=',.0f',
                       category_orders={"연_구분": filtered_x_labels_1_bar, "그룹": final_group_order})
+        
+        # 스택 막대 상단에 연도별 전체 총합 표시
+        yr_grp1_tot = yr_grp1_bar.groupby('연_구분')['값'].sum().reset_index()
+        for _, row in yr_grp1_tot.iterrows():
+            fig2.add_annotation(
+                x=row['연_구분'],
+                y=row['값'],
+                text=f"{row['값']:,.0f}",
+                showarrow=False,
+                yshift=10,
+                font=dict(size=14, color="black")
+            )
+            
         fig2.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
         st.plotly_chart(fig2, use_container_width=True)
             
