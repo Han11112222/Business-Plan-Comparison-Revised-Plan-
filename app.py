@@ -149,9 +149,21 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             col_bar, col_line = st.columns([3, 7])
             
             with col_bar:
-                # 좌측: 연간 총합 막대그래프 (텍스트 크기 1.5배 확대)
+                # 좌측: 연간 총합 막대그래프 (텍스트 크기 1.5배 확대 및 대비 비율 추가)
                 df_tot = df_filtered.groupby('구분_비교')['값'].sum().reset_index()
-                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text_auto=',.0f', color='구분_비교',
+                
+                plan_val = df_tot.loc[df_tot['구분_비교'] == '계획', '값'].sum()
+                texts = []
+                for _, row in df_tot.iterrows():
+                    val_str = f"{row['값']:,.0f}"
+                    if row['구분_비교'] == '예상실적' and plan_val > 0:
+                        ratio = (row['값'] / plan_val) * 100
+                        texts.append(f"{val_str}<br>({ratio:.1f}%)")
+                    else:
+                        texts.append(val_str)
+                df_tot['텍스트'] = texts
+
+                fig_bar = px.bar(df_tot, x='구분_비교', y='값', text='텍스트', color='구분_비교',
                                  color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_bar.update_traces(textfont_size=18)  # 폰트 사이즈 키움
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
