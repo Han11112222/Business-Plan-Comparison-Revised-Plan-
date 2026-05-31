@@ -479,7 +479,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
     
     # ==========================================
-    # 💡 4. 계획대비 예상실적 (여백 및 범례/단위 위치 수정본)
+    # 💡 4. 계획대비 예상실적 (단위 위치 및 마진 수정본)
     # ==========================================
     st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
@@ -535,7 +535,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
             diff_color = "#d62728" if row['차이'] < 0 else "#2ca02c"
             rate_text = f"{row['달성률']:.1f}%"
             
-            # 🔥 1.05에서 1.02로 수정하여 텍스트를 막대 쪽으로 당김
             fig.add_annotation(
                 y=idx, x=1.02, xref="paper", yref="y",
                 text=f"<span style='color:{diff_color}; font-size:14px'><b>{diff_text}</b></span> <span style='color:gray; font-size:13px'>({rate_text})</span>",
@@ -545,21 +544,19 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         max_val = max(df_data['계획'].max(), df_data['실적'].max())
         if max_val == 0: max_val = 1
         
-        # 🔥 우측 상단 끝(막대 끝부분 라인)으로 단위 이동 (x=1.0)
-        fig.add_annotation(x=1.0, y=1.08, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
+        # 🔥 단위 텍스트 y값을 1.05로 맞추고 yanchor 설정하여 상단 여백 보호
+        fig.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", yanchor="bottom", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
         
         calculated_height = len(df_data) * 70 + 80 
         
         fig.update_layout(
             barmode='overlay', 
             height=calculated_height,
-            # 🔥 range를 줄여 막대가 차지하는 비율을 늘림 -> 결과적으로 우측 텍스트가 가까워짐
             xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="", range=[0, max_val * 1.15]),
             yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
-            # 🔥 margin 오른쪽(r)을 200에서 140으로 줄여 빈 공간 최소화
-            margin=dict(l=150, r=140, t=40, b=20),
+            # 🔥 상단 여백(t)을 60으로 늘려 글자 잘림 방지
+            margin=dict(l=150, r=140, t=60, b=20),
             showlegend=show_legend,
-            # 🔥 범례를 막대가 시작하는 왼쪽(x=0)으로 이동
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0) if show_legend else None
         )
         return fig
