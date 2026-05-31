@@ -399,38 +399,56 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
     st.markdown("---")
 
-    # 2. 폭포수 차트
+    # ==========================================
+    # 💡 2. 폭포수 차트 (동적 기간 조회 추가)
+    # ==========================================
     st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
+    
+    # 🔥 라디오 버튼 추가 (기간 조회)
+    wf_period = st.radio("조회 기간 선택 (폭포수 차트)", ["연간", "1~3월", "4~12월"], horizontal=True, key="wf_period")
+    
+    if wf_period == "연간":
+        col_plan_wf, col_act_wf, col_diff_wf = '당초_합계', '변경_합계', '증감_합계'
+    elif wf_period == "1~3월":
+        col_plan_wf, col_act_wf, col_diff_wf = '당초_1~3월', '변경_1~3월', '증감_1~3월'
+    else:
+        col_plan_wf, col_act_wf, col_diff_wf = '당초_4~12월', '변경_4~12월', '증감_4~12월'
+        
     df_wf = df_summary.drop('총계')
+    
+    plan_val_wf = df_summary.loc['총계', col_plan_wf]
+    act_val_wf = df_summary.loc['총계', col_act_wf]
+    
     wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
     wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
-    wf_values = [plan_tot] + df_wf['증감_합계'].tolist() + [act_tot]
-    text_labels = [f"{plan_tot:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf['증감_합계']] + [f"{act_tot:,.0f}"]
+    wf_values = [plan_val_wf] + df_wf[col_diff_wf].tolist() + [act_val_wf]
+    text_labels = [f"{plan_val_wf:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf[col_diff_wf]] + [f"{act_val_wf:,.0f}"]
 
     fig_wf = go.Figure(go.Waterfall(
         orientation="v", measure=wf_measures, x=wf_labels, y=wf_values, text=text_labels, textposition="outside",
         decreasing={"marker":{"color":"#ff7f0e"}}, increasing={"marker":{"color":"#1f77b4"}}, totals={"marker":{"color":"#2ca02c"}}      
     ))
     
-    # 🔥 Y축 범위 최적화 (물결효과 대체: 하단부 자르기)
-    running_vals = [plan_tot]
-    current_val = plan_tot
-    for v in df_wf['증감_합계']:
+    # Y축 범위 최적화 (물결효과 대체: 하단부 자르기)
+    running_vals = [plan_val_wf]
+    current_val = plan_val_wf
+    for v in df_wf[col_diff_wf]:
         current_val += v
         running_vals.append(current_val)
-    running_vals.append(act_tot)
+    running_vals.append(act_val_wf)
     
     y_min, y_max = min(running_vals), max(running_vals)
     y_diff = y_max - y_min if y_max != y_min else y_max * 0.1
     
-    fig_wf.update_layout(title="당초 계획 대비 용도별 증감 브릿지", margin=dict(t=40, b=40))
-    # Y축 하단부를 과감하게 잘라서 윗부분(편차)만 확대해 보여줍니다.
+    fig_wf.update_layout(title=f"당초 계획 대비 용도별 증감 브릿지 ({wf_period})", margin=dict(t=40, b=40))
     fig_wf.update_yaxes(range=[y_min - y_diff * 1.5, y_max + y_diff * 0.8]) 
     
     st.plotly_chart(fig_wf, use_container_width=True)
     st.markdown("---")
 
-    # 3. 요약 테이블
+    # ==========================================
+    # 💡 3. 스마트 요약 테이블 (스크롤 제거 CSS)
+    # ==========================================
     st.markdown("#### 🚥 실천사업계획 요약 테이블")
     table_cols = [
         '당초_1~3월', '당초_4~12월', '당초_합계',
@@ -448,17 +466,18 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 
     try: styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
     except: styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
-    st.dataframe(styled_df, use_container_width=True)
+    
+    # 🔥 DataFrame 전체가 보이도록 높이 지정 (행 개수에 비례)
+    table_height = (len(df_display) + 2) * 35 
+    st.dataframe(styled_df, use_container_width=True, height=table_height)
     st.markdown("---")
     
-    # (요청사항 반영: 기존 4번 누적 막대그래프 삭제 완료)
-    
     # ==========================================
-    # 💡 4. 신규: 계획대비 예상실적 (Bullet 형태 - 분리 및 정렬 완벽 적용)
+    # 💡 4. 계획대비 예상실적 (Bullet 형태 - 파트1, 파트2 분리 및 단위 고정)
     # ==========================================
     st.markdown(f"#### 🎯 계획대비 예상실적 (기간별 세부 현황)")
     
-    period_sel = st.radio("조회 기간 선택", ["연간", "1~3월", "4~12월"], horizontal=True, key="period_sel")
+    period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~3월", "4~12월"], horizontal=True, key="period_sel")
     
     if period_sel == "연간":
         col_plan, col_act = '당초_합계', '변경_합계'
@@ -472,30 +491,37 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_perf['차이'] = df_perf['실적'] - df_perf['계획']
     df_perf['달성률'] = (df_perf['실적'] / df_perf['계획'] * 100).fillna(0)
     
-    # 총계, 가정용, 가정용 외 데이터 분리
+    # 💡 [파트1] 용: 총계 / 가정용 / 가정용 외 (나머지 합)
     df_perf_total = df_perf.loc[['총계']]
+    df_perf_home = df_perf.loc[['가정용']] if '가정용' in df_perf.index else pd.DataFrame()
     
-    has_home = '가정용' in df_perf.index
-    if has_home:
-        df_perf_home = df_perf.loc[['가정용']]
-        df_perf_others = df_perf.loc[~df_perf.index.isin(['총계', '가정용'])]
+    others_mask = ~df_perf.index.isin(['총계', '가정용'])
+    if others_mask.any():
+        others_sum = df_perf.loc[others_mask, ['계획', '실적']].sum()
+        others_row = pd.DataFrame([others_sum], index=['가정용 외 (합계)'])
+        others_row['차이'] = others_row['실적'] - others_row['계획']
+        others_row['달성률'] = (others_row['실적'] / others_row['계획'] * 100).fillna(0)
     else:
-        df_perf_home = pd.DataFrame()
-        df_perf_others = df_perf.loc[~df_perf.index.isin(['총계'])]
-    
-    # Plotly 특성에 맞춰 역순으로 뒤집기 (위에서부터 차례대로 출력됨)
-    df_perf_others = df_perf_others.iloc[::-1]
+        others_row = pd.DataFrame()
+
+    # 파트1 데이터 병합 후 역순 배치 (위에서부터 차례대로 출력)
+    part1_df = pd.concat([df_perf_total, df_perf_home, others_row])
+    part1_df = part1_df.iloc[::-1]
+
+    # 💡 [파트2] 용: 가정용 외 세부 용도
+    part2_df = df_perf.loc[others_mask]
+    part2_df = part2_df.iloc[::-1]
     
     def draw_bullet_chart(df_data, chart_height, show_legend=False):
         fig = go.Figure()
         
-        # 배경: 당초 계획 (넓고 옅은 회색 막대)
+        # 배경: 당초 계획
         fig.add_trace(go.Bar(
             y=df_data.index, x=df_data['계획'], name='당초 계획', orientation='h',
             marker_color='#e2e6ea', width=0.8, hoverinfo='x+name'
         ))
         
-        # 전경: 예상 실적 (얇고 진한 파란색 막대) - textposition='outside'로 텍스트 바깥 배치
+        # 전경: 예상 실적 - 텍스트 바깥(outside)
         fig.add_trace(go.Bar(
             y=df_data.index, x=df_data['실적'], name='예상 실적', orientation='h',
             marker_color='#1f77b4', width=0.5,
@@ -503,7 +529,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
             textposition='outside', hoverinfo='x+name', textfont=dict(size=14, color='black', weight="bold")
         ))
         
-        # 차트 우측에 차이 및 달성률 텍스트 추가
+        # 차이 및 달성률 텍스트
         for idx, row in df_data.iterrows():
             diff_text = f"▲ {row['차이']:,.0f}" if row['차이'] > 0 else (f"▼ {abs(row['차이']):,.0f}" if row['차이'] < 0 else "-")
             diff_color = "#d62728" if row['차이'] < 0 else "#2ca02c"
@@ -518,40 +544,30 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         max_val = max(df_data['계획'].max(), df_data['실적'].max())
         if max_val == 0: max_val = 1
         
+        # 🔥 단위 표시 위치: paper(전체 캔버스) 기준으로 차트 바로 위(y=1.05), 우측(x=0.98)으로 이동하여 잘리지 않게 조정
+        fig.add_annotation(x=0.98, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
+        
         fig.update_layout(
             barmode='overlay', 
             height=chart_height,
-            # X축 범위를 넉넉히 잡아 outside 텍스트가 잘리지 않게 보호
             xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="", range=[0, max_val * 1.35]),
             yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
-            # 🔥 핵심: margin의 left(l) 값을 150으로 통일하여 모든 차트의 시작선이 정확히 일치하도록 고정
-            margin=dict(l=150, r=200, t=30, b=20),
+            margin=dict(l=150, r=200, t=40, b=20), # top 여백 40으로 늘려 단위 표시 공간 확보
             showlegend=show_legend,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1) if show_legend else None
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1) if show_legend else None
         )
-        
-        # 차트 상단 우측에 단위 텍스트 삽입
-        fig.add_annotation(x=1.2, y=1.1, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
-        
         return fig
 
-    # 1. 총계 
-    st.markdown("##### 📌 총계 현황")
-    fig_total = draw_bullet_chart(df_perf_total, chart_height=120, show_legend=True)
-    st.plotly_chart(fig_total, use_container_width=True)
+    # [파트1] 렌더링
+    st.markdown("##### 📌 [파트1] 큰 구성 현황 (총계/가정용/가정용외합계)")
+    fig_part1 = draw_bullet_chart(part1_df, chart_height=max(150, len(part1_df) * 60), show_legend=True)
+    st.plotly_chart(fig_part1, use_container_width=True)
 
-    # 2. 가정용 
-    if not df_perf_home.empty:
-        st.markdown("##### 🏠 가정용")
-        fig_home = draw_bullet_chart(df_perf_home, chart_height=100, show_legend=False)
-        st.plotly_chart(fig_home, use_container_width=True)
-
-    # 3. 가정용 외 
-    if not df_perf_others.empty:
-        st.markdown("##### 🏢 가정용 외 세부 용도")
-        # 항목 개수에 따라 차트 높이를 동적으로 크게 늘림
-        fig_others = draw_bullet_chart(df_perf_others, chart_height=max(350, len(df_perf_others) * 60), show_legend=False)
-        st.plotly_chart(fig_others, use_container_width=True)
+    # [파트2] 렌더링
+    if not part2_df.empty:
+        st.markdown("##### 📌 [파트2] 가정용 외 세부 용도")
+        fig_part2 = draw_bullet_chart(part2_df, chart_height=max(350, len(part2_df) * 60), show_legend=False)
+        st.plotly_chart(fig_part2, use_container_width=True)
 
 
 # ─────────────────────────────────────────────────────────
