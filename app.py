@@ -428,26 +428,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     # 💡 2. 증감 요인 폭포수 차트 (Waterfall)
     # ==========================================
-    st.markdown("#### 🌊 증감 요인 폭포수 차트 (Waterfall)")
+    st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
     
-    # 👉 스위치 버튼 추가: 용도별 vs 기간별
-    wf_view = st.radio("🔘 차트 구분 선택", ["용도별 구분", "기간별 구분 (1~3월 실적, 4~12월 계획)"], horizontal=True, key="wf_view_radio")
-    
-    if wf_view == "용도별 구분":
-        df_wf = df_summary.drop('총계')
-        wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
-        wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
-        wf_values = [plan_tot] + df_wf['증감_합계'].tolist() + [act_tot]
-        text_labels = [f"{plan_tot:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf['증감_합계']] + [f"{act_tot:,.0f}"]
-        chart_title = "당초 계획 대비 용도별 증감 브릿지"
-    else:
-        diff_1_3_tot = df_summary.loc['총계', '증감_1~3월']
-        diff_4_12_tot = df_summary.loc['총계', '증감_4~12월']
-        wf_labels = ["당초 계획 합계", "1~3월 실적반영 (증감)", "4~12월 계획수정 (증감)", "변경 예상 합계"]
-        wf_measures = ["absolute", "relative", "relative", "total"]
-        wf_values = [plan_tot, diff_1_3_tot, diff_4_12_tot, act_tot]
-        text_labels = [f"{v:,.0f}" for v in wf_values]
-        chart_title = "당초 계획 대비 기간별 1~3월 및 4~12월 증감 브릿지"
+    # 라디오 버튼 삭제, 용도별 구분만 노출되도록 기본 원상복구
+    df_wf = df_summary.drop('총계')
+    wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
+    wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
+    wf_values = [plan_tot] + df_wf['증감_합계'].tolist() + [act_tot]
+    text_labels = [f"{plan_tot:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf['증감_합계']] + [f"{act_tot:,.0f}"]
 
     fig_wf = go.Figure(go.Waterfall(
         orientation="v",
@@ -460,7 +448,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         increasing={"marker":{"color":"#1f77b4"}}, # 증가는 파란색
         totals={"marker":{"color":"#2ca02c"}}      # 총합은 초록색
     ))
-    fig_wf.update_layout(title=chart_title, margin=dict(t=40, b=40))
+    fig_wf.update_layout(title="당초 계획 대비 용도별 증감 브릿지", margin=dict(t=40, b=40))
     st.plotly_chart(fig_wf, use_container_width=True)
 
     st.markdown("---")
@@ -489,7 +477,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         else:
             return 'background-color: #ffe6e6; color: #cc0000;' # 연한 빨강 배경, 붉은 글씨
 
-    # pandas 버전에 맞춰 호환되도록 applymap/map 사용
     try:
         styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
     except:
@@ -500,23 +487,57 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
 
     # ==========================================
-    # 💡 4. 기간별 물량 구성비 차트 (가로 누적 막대)
+    # 💡 4. 기간별 물량 구성비 차트 (가로 누적 막대) - 가정용/가정용외 분리
     # ==========================================
-    st.markdown("#### 📊 변경(예상실적) 기준 1~3월 vs 4~12월 비중")
+    st.markdown("#### 📊 당초계획 vs 예상실적 기간별 비중 비교 (가정용 / 가정용 외 분리)")
     
-    a2026['기간'] = a2026['월'].apply(lambda x: '1~3월 실적' if x <= 3 else '4~12월 예상')
-    bar_grp = a2026.groupby(['그룹', '기간'])['값'].sum().reset_index()
+    p2026_bar = p2026.copy()
+    a2026_bar = a2026.copy()
     
-    current_g = a2026['그룹'].unique()
+    p2026_bar['구분_차트'] = '당초계획'
+    a2026_bar['구분_차트'] = '예상실적'
+    
+    df_bar_comb = pd.concat([p2026_bar, a2026_bar])
+    # 사용자가 원한 정확한 범례(단추) 명칭 적용
+    df_bar_comb['기간'] = df_bar_comb['월'].apply(lambda x: '1~3월(실적)' if x <= 3 else '4~12월(계획)')
+    
+    bar_grp = df_bar_comb.groupby(['그룹', '구분_차트', '기간'])['값'].sum().reset_index()
+    
+    current_g = df_bar_comb['그룹'].unique()
     v_ord = [g for g in ORDER_LIST if g in current_g]
     r_ord = [g for g in current_g if g not in v_ord]
     f_ord = v_ord + r_ord
     
-    fig_bar_h = px.bar(bar_grp, x='값', y='그룹', color='기간', orientation='h', text_auto=',.0f',
-                       category_orders={"그룹": f_ord[::-1]},
-                       color_discrete_map={"1~3월 실적": "#1f77b4", "4~12월 예상": "#aec7e8"})
-    fig_bar_h.update_layout(title=f"각 용도별 1~3월과 4~12월 물량 구성비 (단위: {unit})", barmode='stack')
-    st.plotly_chart(fig_bar_h, use_container_width=True)
+    # 1) 가정용 단독 그래프
+    st.markdown("##### 🏠 가정용 비교")
+    df_home = bar_grp[bar_grp['그룹'] == '가정용'].copy()
+    df_home['y_label'] = df_home['구분_차트']
+    
+    fig_home = px.bar(df_home, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
+                      category_orders={"y_label": ["예상실적", "당초계획"]},
+                      color_discrete_map={"1~3월(실적)": "#1f77b4", "4~12월(계획)": "#aec7e8"})
+    fig_home.update_layout(barmode='stack', yaxis_title="", height=200, margin=dict(t=30, b=30))
+    st.plotly_chart(fig_home, use_container_width=True)
+    
+    # 2) 가정용 외 그래프
+    st.markdown("##### 🏢 가정용 외 용도 비교")
+    df_others = bar_grp[bar_grp['그룹'] != '가정용'].copy()
+    
+    # 위아래로 당초계획과 예상실적이 나란히 나오도록 y축 라벨 결합
+    df_others['y_label'] = df_others.apply(lambda r: f"{r['그룹']} ({r['구분_차트']})", axis=1)
+    
+    y_orders = []
+    for g in reversed(f_ord):
+        if g != '가정용':
+            y_orders.extend([f"{g} (예상실적)", f"{g} (당초계획)"])
+            
+    fig_others = px.bar(df_others, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
+                        category_orders={"y_label": y_orders},
+                        color_discrete_map={"1~3월(실적)": "#1f77b4", "4~12월(계획)": "#aec7e8"})
+    
+    fig_height = max(300, len(y_orders) * 35) # 용도가 많아도 찌그러지지 않게 높이 자동 계산
+    fig_others.update_layout(barmode='stack', yaxis_title="", height=fig_height, margin=dict(t=30, b=30))
+    st.plotly_chart(fig_others, use_container_width=True)
 
 
 # ─────────────────────────────────────────────────────────
