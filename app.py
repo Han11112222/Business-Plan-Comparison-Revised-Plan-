@@ -92,7 +92,6 @@ def make_long_data(df, label):
 
     for col in df.columns:
         if col in exclude_cols: continue
-        # 오차 방지를 위해 round() 제거. 원본 데이터 소수점 그대로 가져와서 합산
         val_series = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if val_series.sum() == 0: continue
 
@@ -431,7 +430,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
     
-    # 라디오 버튼 삭제, 용도별 구분만 노출되도록 기본 원상복구
     df_wf = df_summary.drop('총계')
     wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
     wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
@@ -445,9 +443,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         y=wf_values,
         text=text_labels,
         textposition="outside",
-        decreasing={"marker":{"color":"#ff7f0e"}}, # 감소는 주황색
-        increasing={"marker":{"color":"#1f77b4"}}, # 증가는 파란색
-        totals={"marker":{"color":"#2ca02c"}}      # 총합은 초록색
+        decreasing={"marker":{"color":"#ff7f0e"}}, 
+        increasing={"marker":{"color":"#1f77b4"}}, 
+        totals={"marker":{"color":"#2ca02c"}}      
     ))
     fig_wf.update_layout(title="당초 계획 대비 용도별 증감 브릿지", margin=dict(t=40, b=40))
     st.plotly_chart(fig_wf, use_container_width=True)
@@ -455,7 +453,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
 
     # ==========================================
-    # 💡 3. 스마트 요약 테이블 (에러 수정)
+    # 💡 3. 스마트 요약 테이블
     # ==========================================
     st.markdown("#### 🚥 실천사업계획 요약 테이블")
     
@@ -473,9 +471,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         if pd.isna(val) or val == 0:
             return ''
         elif val > 0:
-            return 'background-color: #e6f2ff; color: #0055a4;' # 연한 파랑 배경, 파란 글씨
+            return 'background-color: #e6f2ff; color: #0055a4;'
         else:
-            return 'background-color: #ffe6e6; color: #cc0000;' # 연한 빨강 배경, 붉은 글씨
+            return 'background-color: #ffe6e6; color: #cc0000;'
 
     try:
         styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
@@ -499,12 +497,12 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     
     df_bar_comb = pd.concat([p2026_bar, a2026_bar])
     
-    # 👉 수정된 부분: 당초계획(상단), 예상실적(하단)에 맞는 논리적 기간 명칭 설정
+    # 💡 수정: 기간명(범례)을 요청하신 내용으로 명확히 수정
     def set_period(row):
         if row['구분_차트'] == '당초계획':
             return '1~3월(당초)' if row['월'] <= 3 else '4~12월(당초)'
         else:
-            return '1~3월(변경)' if row['월'] <= 3 else '4~12월(계획)'
+            return '1~3월(변경)' if row['월'] <= 3 else '4~12월(변경)'
             
     df_bar_comb['기간'] = df_bar_comb.apply(set_period, axis=1)
     
@@ -515,36 +513,35 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     r_ord = [g for g in current_g if g not in v_ord]
     f_ord = v_ord + r_ord
     
-    # 공통 색상 매핑 (분기별 통일감을 위해 당초/변경 모두 1~3월은 진한 파랑, 4~12월은 연한 파랑 지정)
     color_map = {
         "1~3월(당초)": "#1f77b4", "4~12월(당초)": "#aec7e8",
-        "1~3월(변경)": "#1f77b4", "4~12월(계획)": "#aec7e8"
+        "1~3월(변경)": "#1f77b4", "4~12월(변경)": "#aec7e8"
     }
-    period_orders = ["1~3월(당초)", "4~12월(당초)", "1~3월(변경)", "4~12월(계획)"]
+    period_orders = ["1~3월(당초)", "4~12월(당초)", "1~3월(변경)", "4~12월(변경)"]
     
-    # 👉 1) 가정용 단독 그래프
+    # 💡 가정용 단독 그래프 수정
     st.markdown("##### 🏠 가정용 비교")
     df_home = bar_grp[bar_grp['그룹'] == '가정용'].copy()
     df_home['y_label'] = df_home['구분_차트']
     
+    # Plotly는 리스트의 첫 번째 항목을 맨 아래에 배치하므로 예상실적을 앞에 둡니다.
     fig_home = px.bar(df_home, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
-                      category_orders={"y_label": ["당초계획", "예상실적"], "기간": period_orders},
+                      category_orders={"y_label": ["예상실적", "당초계획"], "기간": period_orders},
                       color_discrete_map=color_map)
     fig_home.update_layout(barmode='stack', yaxis_title="", height=200, margin=dict(t=30, b=30))
-    fig_home.update_yaxes(autorange="reversed") # 👉 당초계획이 반드시 상단에 오도록 y축 강제 역정렬
     st.plotly_chart(fig_home, use_container_width=True)
     
-    # 👉 2) 가정용 외 그래프
+    # 💡 가정용 외 그래프 수정
     st.markdown("##### 🏢 가정용 외 용도 비교")
     df_others = bar_grp[bar_grp['그룹'] != '가정용'].copy()
-    
     df_others['y_label'] = df_others.apply(lambda r: f"{r['그룹']} ({r['구분_차트']})", axis=1)
     
     y_orders = []
-    # autorange="reversed"를 사용하므로, 엑셀 표 순서(영업용->수송용)대로 리스트에 담으면 위에서부터 아래로 예쁘게 그려집니다.
-    for g in f_ord:
+    # 표 순서(영업용->...->수송용)가 위에서 아래로 나오게 하려면 역순으로 배치
+    for g in reversed(f_ord):
         if g != '가정용':
-            y_orders.extend([f"{g} (당초계획)", f"{g} (예상실적)"])
+            # 각 용도 내에서도 당초계획이 상단, 예상실적이 하단에 나오게 하려면 예상실적을 리스트 앞에 배치
+            y_orders.extend([f"{g} (예상실적)", f"{g} (당초계획)"])
             
     fig_others = px.bar(df_others, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
                         category_orders={"y_label": y_orders, "기간": period_orders},
@@ -552,7 +549,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     
     fig_height = max(300, len(y_orders) * 35) 
     fig_others.update_layout(barmode='stack', yaxis_title="", height=fig_height, margin=dict(t=30, b=30))
-    fig_others.update_yaxes(autorange="reversed") # 👉 위에서 아래로 순서대로 정렬 (상단: 당초계획, 하단: 예상실적)
     st.plotly_chart(fig_others, use_container_width=True)
 
 
