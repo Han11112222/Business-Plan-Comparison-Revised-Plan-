@@ -108,7 +108,7 @@ def make_long_data(df, label):
     return pd.concat(records, ignore_index=True)
 
 # ─────────────────────────────────────────────────────────
-# 🟢 4-1. 심플 대시보드 렌더링 (Basic report -> 세부내용)
+# 🟢 4-1. 심플 대시보드 렌더링 (2. 세부내용)
 # ─────────────────────────────────────────────────────────
 def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_value=42.563):
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
@@ -341,10 +341,10 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 
 
 # ─────────────────────────────────────────────────────────
-# 🟢 4-2. One Page Review 렌더링 (1번 탭)
+# 🟢 4-2. One Page Review 렌더링 (1. One page review)
 # ─────────────────────────────────────────────────────────
 def render_one_page_review(long_plan, long_action, unit, heating_value):
-    st.subheader(f"📑 2026년 DSE 예상실적(실천사업계획) 요약 보고서 ({unit})")
+    # 상단 요약보고서 타이틀 삭제 요청 반영
     
     if long_plan.empty or long_action.empty:
         st.warning("데이터가 부족합니다. 공급량_사업계획 및 공급량_실천사업계획 데이터를 확인해주세요.")
@@ -377,6 +377,10 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     valid_order = [g for g in ORDER_LIST if g in df_summary.index]
     rest = [g for g in df_summary.index if g not in valid_order]
     df_summary = df_summary.reindex(valid_order + rest)
+    
+    # 공란(빈 인덱스) 삭제 처리
+    df_summary = df_summary[df_summary.index.astype(str).str.strip() != '']
+    df_summary = df_summary.dropna(how='all')
 
     df_summary.loc['총계'] = df_summary.sum()
 
@@ -385,8 +389,8 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
     df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
 
-    # 1. 핵심 KPI 요약 카드
-    st.markdown("#### 🎯 2026년 핵심 요약")
+    # 1. 핵심 내용 카드 (Total KPI 제거 반영)
+    st.markdown("#### 🎯 핵심내용")
     plan_tot = df_summary.loc['총계', '당초_합계']
     act_tot = df_summary.loc['총계', '변경_합계']
     diff_tot = df_summary.loc['총계', '증감_합계']
@@ -418,13 +422,11 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     plan_val_wf = df_summary.loc['총계', col_plan_wf]
     act_val_wf = df_summary.loc['총계', col_act_wf]
     
-    # 텍스트 변경: 당초계획 / 예상실적
     wf_labels = ["당초계획"] + df_wf.index.tolist() + ["예상실적"]
     wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
     wf_values = [plan_val_wf] + df_wf[col_diff_wf].tolist() + [act_val_wf]
     text_labels = [f"{plan_val_wf:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf[col_diff_wf]] + [f"{act_val_wf:,.0f}"]
 
-    # 0인 항목들을 이어주는 회색 실선(connector) 추가
     fig_wf = go.Figure(go.Waterfall(
         orientation="v", measure=wf_measures, x=wf_labels, y=wf_values, text=text_labels, textposition="outside",
         decreasing={"marker":{"color":"#ff7f0e"}}, increasing={"marker":{"color":"#1f77b4"}}, totals={"marker":{"color":"#2ca02c"}},
@@ -448,7 +450,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
 
     # ==========================================
-    # 💡 3. 스마트 요약 테이블 (단위 추가)
+    # 💡 3. 스마트 요약 테이블 
     # ==========================================
     st.markdown(f"#### 🚥 실천사업계획 요약 테이블 (단위: {unit})")
     table_cols = [
@@ -465,8 +467,15 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         elif val > 0: return 'background-color: #e6f2ff; color: #0055a4;'
         else: return 'background-color: #ffe6e6; color: #cc0000;'
 
-    try: styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
-    except: styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
+    def bold_total_row(row):
+        if row.name == '총계':
+            return ['font-weight: bold; background-color: #f8f9fa;'] * len(row)
+        return [''] * len(row)
+
+    try: 
+        styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
+    except: 
+        styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
     table_height = (len(df_display) + 2) * 35 
     st.dataframe(styled_df, use_container_width=True, height=table_height)
@@ -518,7 +527,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         ))
         
         fig.add_trace(go.Bar(
-            y=df_data.index, x=df_data['실적'], name='예상 실적', orientation='h',
+            y=df_data.index, x=df_data['실적'], name='예상실적', orientation='h',
             marker_color='#1f77b4', width=0.5,
             text=[f"{v:,.0f}" for v in df_data['실적']],
             textposition='outside', hoverinfo='x+name', textfont=dict(size=14, color='black', weight="bold")
@@ -540,7 +549,8 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         
         fig.add_annotation(x=0.98, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
         
-        calculated_height = len(df_data) * 80 + 80 
+        # 🔥 항목당 높이를 70픽셀로 줄여서 (기존 80 대비 10% 이상 축소) 스크롤 부담은 줄이되 두께감은 유지!
+        calculated_height = len(df_data) * 70 + 80 
         
         fig.update_layout(
             barmode='overlay', 
@@ -553,7 +563,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         )
         return fig
 
-    # 소제목 변경: [요약], [세부용도]
     st.markdown("##### 📌 [요약]")
     fig_part1 = draw_bullet_chart(part1_df, show_legend=True)
     st.plotly_chart(fig_part1, use_container_width=True)
@@ -568,11 +577,11 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 # 🟢 5. 메인 실행
 # ─────────────────────────────────────────────────────────
 def main():
-    st.title("🔥 2026년 DSE 예상실적(실천사업계획)비교분석")
+    st.title("📈 2026년 DSE 예상실적(실천사업계획) 비교분석")
     
     with st.sidebar:
         st.header("⚙️ 메뉴 및 기본 설정")
-        # 탭 순서 변경 (One page review를 먼저)
+        # 탭 순서 변경 (One page review를 1번으로 배치)
         menu = st.radio("📋 보고서 탭 선택", ["1. One page review", "2. 세부내용"])
         st.markdown("---")
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
@@ -617,7 +626,7 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
-            # 실행 순서 변경
+            # 메뉴 순서 변경 반영
             if menu == "2. 세부내용":
                 if "GJ" in unit: df_final['값'] = df_final['값'] / 1000
                 elif "부피" in unit: df_final['값'] = df_final['값'] / heating_value / 1000
