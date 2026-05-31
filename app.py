@@ -436,7 +436,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.dataframe(styled_df, use_container_width=True)
     st.markdown("---")
 
-    # 4. 기간별 물량 구성비 차트 (오류 완벽 수정본)
+    # 4. 기간별 물량 구성비 차트
     st.markdown("#### 📊 당초계획 vs 예상실적 기간별 비중 비교 (가정용 / 가정용 외 분리)")
     p2026_bar, a2026_bar = p2026.copy(), a2026.copy()
     p2026_bar['구분_차트'] = '당초계획'
@@ -468,7 +468,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_home = bar_grp[bar_grp['그룹'] == '가정용'].copy()
     df_home['y_label'] = df_home['구분_차트']
     
-    # 🔥 리스트 순서 정방향 배치 + autorange="reversed" 조합으로 무조건 당초가 상단 고정!
     fig_home = px.bar(df_home, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
                       category_orders={"y_label": ["당초계획", "예상실적"], "기간": period_orders},
                       color_discrete_map=color_map)
@@ -482,7 +481,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_others['y_label'] = df_others.apply(lambda r: f"{r['그룹']} ({r['구분_차트']})", axis=1)
     
     y_orders = []
-    # 🔥 리스트 역순 배치 제거하고 순방향으로 깔끔하게 담습니다.
     for g in f_ord:
         if g != '가정용':
             y_orders.extend([f"{g} (당초계획)", f"{g} (예상실적)"])
@@ -514,54 +512,65 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_perf = df_summary[[col_plan, col_act]].copy()
     df_perf.columns = ['계획', '실적']
     df_perf['차이'] = df_perf['실적'] - df_perf['계획']
-    # 0으로 나누는 에러 방지를 위해 fillna 처리
     df_perf['달성률'] = (df_perf['실적'] / df_perf['계획'] * 100).fillna(0)
     
-    # 총계 행과 용도별 행을 분리했다가, 총계를 맨 위에 두기 위해 순서 재조합
+    # 총계와 용도별 데이터 분리
     df_perf_total = df_perf.loc[['총계']]
     df_perf_usage = df_perf.drop('총계')
-    plot_df = pd.concat([df_perf_total, df_perf_usage])
     
-    # Plotly Y축 역방향 특성에 맞춰 데이터프레임 자체를 거꾸로 뒤집음
-    plot_df = plot_df.iloc[::-1]
+    # Plotly Y축 역방향 특성에 맞춰 용도별 데이터프레임만 거꾸로 뒤집음
+    df_perf_usage = df_perf_usage.iloc[::-1]
     
-    fig_perf = go.Figure()
-    
-    # 배경: 당초 계획 (넓고 옅은 회색 막대)
-    fig_perf.add_trace(go.Bar(
-        y=plot_df.index, x=plot_df['계획'], name='당초 계획', orientation='h',
-        marker_color='#e2e6ea', width=0.7, hoverinfo='x+name'
-    ))
-    
-    # 전경: 예상 실적 (얇고 진한 파란색 막대)
-    fig_perf.add_trace(go.Bar(
-        y=plot_df.index, x=plot_df['실적'], name='예상 실적', orientation='h',
-        marker_color='#1f77b4', width=0.4,
-        text=[f"{v:,.0f}" for v in plot_df['실적']],
-        textposition='inside', insidetextanchor='end', hoverinfo='x+name'
-    ))
-    
-    # 차트 우측에 차이(▲/▼) 및 달성률(%) 어노테이션(텍스트) 추가
-    for idx, row in plot_df.iterrows():
-        diff_text = f"▲ {row['차이']:,.0f}" if row['차이'] > 0 else (f"▼ {abs(row['차이']):,.0f}" if row['차이'] < 0 else "-")
-        diff_color = "#d62728" if row['차이'] < 0 else "#2ca02c"
-        rate_text = f"{row['달성률']:.1f}%"
+    def draw_bullet_chart(df_data, chart_height, show_legend=False):
+        fig = go.Figure()
         
-        fig_perf.add_annotation(
-            y=idx, x=1.01, xref="paper", yref="y",
-            text=f"<span style='color:{diff_color}; font-size:14px'><b>{diff_text}</b></span> <span style='color:gray; font-size:12px'>({rate_text})</span>",
-            showarrow=False, xanchor="left", align="left"
+        # 배경: 당초 계획 (넓고 옅은 회색 막대 - 두께 확장)
+        fig.add_trace(go.Bar(
+            y=df_data.index, x=df_data['계획'], name='당초 계획', orientation='h',
+            marker_color='#e2e6ea', width=0.8, hoverinfo='x+name'
+        ))
+        
+        # 전경: 예상 실적 (얇고 진한 파란색 막대 - 두께 확장)
+        fig.add_trace(go.Bar(
+            y=df_data.index, x=df_data['실적'], name='예상 실적', orientation='h',
+            marker_color='#1f77b4', width=0.5,
+            text=[f"{v:,.0f}" for v in df_data['실적']],
+            textposition='inside', insidetextanchor='end', hoverinfo='x+name'
+        ))
+        
+        # 차트 우측에 차이(▲/▼) 및 달성률(%) 어노테이션(텍스트) 추가
+        for idx, row in df_data.iterrows():
+            diff_text = f"▲ {row['차이']:,.0f}" if row['차이'] > 0 else (f"▼ {abs(row['차이']):,.0f}" if row['차이'] < 0 else "-")
+            diff_color = "#d62728" if row['차이'] < 0 else "#2ca02c"
+            rate_text = f"{row['달성률']:.1f}%"
+            
+            fig.add_annotation(
+                y=idx, x=1.01, xref="paper", yref="y",
+                text=f"<span style='color:{diff_color}; font-size:14px'><b>{diff_text}</b></span> <span style='color:gray; font-size:12px'>({rate_text})</span>",
+                showarrow=False, xanchor="left", align="left"
+            )
+            
+        fig.update_layout(
+            barmode='overlay', 
+            height=chart_height,
+            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title=""),
+            yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
+            margin=dict(t=20, b=20, r=150),
+            showlegend=show_legend,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1) if show_legend else None
         )
-        
-    fig_perf.update_layout(
-        barmode='overlay', # 겹쳐서 그리는 핵심 옵션
-        height=max(400, len(plot_df) * 45),
-        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title=""),
-        yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
-        margin=dict(r=150), # 우측 어노테이션이 잘리지 않도록 여백 확보
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    st.plotly_chart(fig_perf, use_container_width=True)
+        return fig
+
+    # 1. 총계 차트 출력
+    st.markdown("##### 📌 총계 현황")
+    fig_total = draw_bullet_chart(df_perf_total, chart_height=120, show_legend=True)
+    st.plotly_chart(fig_total, use_container_width=True)
+
+    # 2. 용도별 차트 출력
+    st.markdown("##### 📌 용도별 세부 현황")
+    # 높이 계수를 45에서 60으로 늘려 막대가 차지하는 절대적인 픽셀 영역을 넉넉히 확보
+    fig_usage = draw_bullet_chart(df_perf_usage, chart_height=max(350, len(df_perf_usage) * 60), show_legend=False)
+    st.plotly_chart(fig_usage, use_container_width=True)
 
 
 # ─────────────────────────────────────────────────────────
