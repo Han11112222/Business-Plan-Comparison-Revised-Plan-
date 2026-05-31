@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import re
 import os
 
@@ -91,6 +92,7 @@ def make_long_data(df, label):
 
     for col in df.columns:
         if col in exclude_cols: continue
+        # 오차 방지를 위해 round() 제거. 원본 데이터 소수점 그대로 가져와서 합산
         val_series = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if val_series.sum() == 0: continue
 
@@ -132,9 +134,11 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
             df_comp['값'] = df_comp['값'] / heating_value / 1000
             
         if not df_comp.empty:
+            # 상단 항목 선택 버튼 (전체 + 용도별)
             options = ["전체"] + ORDER_LIST
             selected_option = st.selectbox("📂 조회할 항목 선택", options=options, index=0, key="sb_2026_comp")
             
+            # 선택된 항목에 따라 데이터 필터링
             if selected_option == "전체":
                 df_filtered = df_comp
                 title_suffix = "전체량"
@@ -142,9 +146,11 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 df_filtered = df_comp[df_comp['그룹'] == selected_option]
                 title_suffix = selected_option
                 
+            # 좌/우 분할 레이아웃 (3:7 비율로 수정)
             col_bar, col_line = st.columns([3, 7])
             
             with col_bar:
+                # 좌측: 연간 총합 막대그래프 (텍스트 크기 1.5배 확대 및 대비 비율 추가)
                 df_tot = df_filtered.groupby('구분_비교')['값'].sum().reset_index()
                 
                 plan_val = df_tot.loc[df_tot['구분_비교'] == '계획', '값'].sum()
@@ -160,12 +166,13 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 
                 fig_bar = px.bar(df_tot, x='구분_비교', y='값', text='텍스트', color='구분_비교',
                                  color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
-                fig_bar.update_traces(textfont_size=18)
+                fig_bar.update_traces(textfont_size=18)  # 폰트 사이즈 키움
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
                 fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_bar, use_container_width=True)
                 
             with col_line:
+                # 우측: 월별 추이 꺾은선그래프
                 df_mon = df_filtered.groupby(['구분_비교', '월'])['값'].sum().reset_index().sort_values('월')
                 fig_line = px.line(df_mon, x='월', y='값', color='구분_비교', markers=True,
                                    color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
@@ -174,25 +181,35 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
                 st.plotly_chart(fig_line, use_container_width=True)
             
+            # --- 하단 데이터 표 (박스) ---
             st.markdown("##### 📋 세부 수치")
             
+            # 피벗 테이블 생성 (구분_비교 vs 월)
             df_table = df_filtered.pivot_table(index='구분_비교', columns='월', values='값', aggfunc='sum').fillna(0)
             
+            # 월 컬럼명 변경 (1 -> 1월)
             month_cols = [m for m in range(1, 13) if m in df_table.columns]
-            df_table = df_table[month_cols]
+            df_table = df_table[month_cols] # 순서 보장
             df_table.rename(columns={m: f"{m}월" for m in month_cols}, inplace=True)
             
+            # 연간 총합 컬럼 추가
             df_table['연간 총합'] = df_table.sum(axis=1)
             
+            # 인덱스 순서 고정 및 증감/대비 계산
             if '계획' in df_table.index and '예상실적' in df_table.index:
                 df_table = df_table.reindex(['계획', '예상실적'])
+                
+                # 증감 추가
                 df_table.loc['증감'] = df_table.loc['예상실적'] - df_table.loc['계획']
+                
+                # 대비 추가 (계획이 0이 아닐 때만 계산)
                 df_table.loc['대비'] = 0.0
                 mask = df_table.loc['계획'] != 0
                 df_table.loc['대비', mask] = (df_table.loc['예상실적', mask] / df_table.loc['계획', mask]) * 100
                 
             df_table.index.name = "구분"
             
+            # 행별 포맷팅을 위한 문자열 변환 (대비는 %, 나머지는 정수 콤마)
             df_display = df_table.copy().astype(object)
             for col in df_display.columns:
                 for idx in df_display.index:
@@ -202,21 +219,25 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                     else:
                         df_display.loc[idx, col] = f"{val:,.0f}"
             
+            # 구분을 컬럼으로 빼서 직접 하이라이트를 줄 수 있도록 리셋
             df_display = df_display.reset_index()
             
+            # 스타일을 CSS로 완전 제어하기 위해 기본 텍스트 정렬만 파이썬에서 지정
             styled_df = df_display.style.set_properties(**{'text-align': 'right'})
             
             try:
                 html_str = styled_df.hide(axis='index').to_html()
             except:
-                html_str = styled_df.hide_index().to_html()
+                html_str = styled_df.hide_index().to_html() # 구버전 판다스 호환
                 
             custom_css = """
             <style>
                 .custom-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; }
                 .custom-table th, .custom-table td { border: 1px solid #e2e6ea; padding: 8px; color: #31333F; }
                 .custom-table th { background-color: #ffffff; }
+                /* 구분 (첫 번째 열) 강제 하이라이트 */
                 .custom-table th:first-child, .custom-table td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
+                /* 연간 총합 (마지막 열) 강제 하이라이트 */
                 .custom-table th:last-child, .custom-table td:last-child { background-color: #e2e6ea !important; text-align: right !important; font-weight: bold !important; }
             </style>
             """
@@ -278,12 +299,15 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         st.markdown("#### 🧱 연도/구분별 용도 구성비")
         yr_grp1 = df_filt1.groupby(['연_구분', '그룹'])['값'].sum().reset_index()
         
+        # 2026(실적)과 2026(계획) 제외
         yr_grp1_bar = yr_grp1[~yr_grp1['연_구분'].isin(['2026 (실적)', '2026 (계획)'])]
         filtered_x_labels_1_bar = [x for x in filtered_x_labels_1 if x not in ['2026 (실적)', '2026 (계획)']]
         
+        # 내부 수치를 M 단위가 아닌 원단위(,.0f)로 변경
         fig2 = px.bar(yr_grp1_bar, x='연_구분', y='값', color='그룹', text_auto=',.0f',
                       category_orders={"연_구분": filtered_x_labels_1_bar, "그룹": final_group_order})
         
+        # 스택 막대 상단에 연도별 전체 총합 표시
         yr_grp1_tot = yr_grp1_bar.groupby('연_구분')['값'].sum().reset_index()
         for _, row in yr_grp1_tot.iterrows():
             fig2.add_annotation(
@@ -291,9 +315,9 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 y=row['값'],
                 text=f"{row['값']:,.0f}",
                 showarrow=False,
-                yanchor="bottom",
-                yshift=15,
-                font=dict(size=14, color="blue")
+                yanchor="bottom", # 텍스트 하단 기준점
+                yshift=15,        # 겹치지 않게 위로 충분히 띄움
+                font=dict(size=14, color="blue") # 상단 텍스트 색상을 푸른색(blue)으로 수정
             )
             
         fig2.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
@@ -326,13 +350,16 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         
         filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2)]
 
+        # 👉 상단 용도 버튼 추가 부분
         selected_group = st.radio("📂 조회할 용도 선택", options=final_group_order, index=0, horizontal=True, key="rb_group_sec3")
 
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
         
+        # 👉 선택한 용도 1개로 그래프용 데이터 필터링
         df_fig3 = df_filt2[df_filt2['그룹'] == selected_group]
         sec2_mon_grp = df_fig3.groupby(['연_구분', '월'])['값'].sum().reset_index()
         
+        # 전체 꺾은선 추이와 색상 통일감 유지
         color_map = {}
         palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2']
         for i, lbl in enumerate(unique_x_labels):
@@ -347,44 +374,161 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         st.plotly_chart(fig3, use_container_width=True)
         
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
+        # 표는 기존처럼 모든 용도를 보여주도록 유지
         piv2 = df_filt2.pivot_table(index='연_구분', columns='그룹', values='값', aggfunc='sum').fillna(0)
         piv2 = piv2.reindex(index=filtered_x_labels_2, columns=[c for c in final_group_order if c in piv2.columns])
         piv2['총계'] = piv2.sum(axis=1)
         st.dataframe(piv2.style.format("{:,.0f}"), use_container_width=True)
+
+
+# ─────────────────────────────────────────────────────────
+# 🟢 4-2. One Page Review 렌더링 (2번 탭)
+# ─────────────────────────────────────────────────────────
+def render_one_page_review(long_plan, long_action, unit, heating_value):
+    st.subheader(f"📑 2026년 DSE 예상실적(실천사업계획) 요약 보고서 ({unit})")
+    
+    if long_plan.empty or long_action.empty:
+        st.warning("데이터가 부족합니다. 공급량_사업계획 및 공급량_실천사업계획 데이터를 확인해주세요.")
+        return
         
-        if st.toggle("🔍 세부 분석 (월별 용도별 상세량)", key="show_detail_2"):
-            st.markdown("##### 📅 월별 용도별 세부량")
-            piv2_detail = df_filt2.pivot_table(index=['연_구분', '월'], columns='그룹', values='값', aggfunc='sum').fillna(0)
-            piv2_detail = piv2_detail.reindex(columns=[c for c in final_group_order if c in piv2_detail.columns])
-            piv2_detail['총계'] = piv2_detail.sum(axis=1)
-            st.dataframe(piv2_detail.style.format("{:,.0f}"), use_container_width=True)
+    # 1. 2026년 데이터만 필터링 및 단위 변환
+    p2026 = long_plan[long_plan['연'] == 2026].copy()
+    a2026 = long_action[long_action['연'] == 2026].copy()
 
+    def apply_unit(df):
+        if "GJ" in unit: df['값'] = df['값'] / 1000
+        elif "부피" in unit: df['값'] = df['값'] / heating_value / 1000
+        return df
 
-# ─────────────────────────────────────────────────────────
-# 🟢 4-2. One Page Review 렌더링 아이디어
-# ─────────────────────────────────────────────────────────
-def render_one_page_review():
-    st.subheader("📑 One page review (요약 보고서)")
+    p2026 = apply_unit(p2026)
+    a2026 = apply_unit(a2026)
+
+    # 2. 그룹별/기간별 집계 함수 (1~3월, 4~12월)
+    def agg_data(df, prefix):
+        df['기간'] = df['월'].apply(lambda x: '1~3월' if x <= 3 else '4~12월')
+        pivot = df.pivot_table(index='그룹', columns='기간', values='값', aggfunc='sum').fillna(0)
+        
+        # 데이터가 비어있을 경우 방어 코드
+        for col in ['1~3월', '4~12월']:
+            if col not in pivot.columns: pivot[col] = 0
+            
+        pivot['합계'] = pivot['1~3월'] + pivot['4~12월']
+        pivot.columns = [f'{prefix}_{c}' for c in pivot.columns]
+        return pivot
+
+    df_p = agg_data(p2026, '당초')
+    df_a = agg_data(a2026, '변경')
+
+    # 데이터 병합
+    df_summary = pd.concat([df_p, df_a], axis=1).fillna(0)
+
+    # ORDER_LIST에 맞게 행 정렬
+    valid_order = [g for g in ORDER_LIST if g in df_summary.index]
+    rest = [g for g in df_summary.index if g not in valid_order]
+    df_summary = df_summary.reindex(valid_order + rest)
+
+    # 총계 행 추가
+    df_summary.loc['총계'] = df_summary.sum()
+
+    # 증감 및 달성률 계산
+    df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
+    df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
+
+    # ==========================================
+    # 💡 1. 핵심 KPI 요약 카드
+    # ==========================================
+    st.markdown("#### 🎯 2026년 핵심 요약 (Total KPI)")
+    plan_tot = df_summary.loc['총계', '당초_합계']
+    act_tot = df_summary.loc['총계', '변경_합계']
+    diff_tot = df_summary.loc['총계', '증감_합계']
+    rate_tot = df_summary.loc['총계', '달성률(%)']
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f}")
+    col2.metric("② 변경(예상) 총계", f"{act_tot:,.0f}")
+    # Streamlit metric의 delta 기능을 활용해 증감을 시각적으로 명확히 표시
+    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f}", delta=f"{diff_tot:,.0f}", delta_color="normal")
+    col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
+
+    st.markdown("---")
+
+    # ==========================================
+    # 💡 2. 용도별 증감 요인 폭포수 차트 (Waterfall)
+    # ==========================================
+    st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
+    # '총계' 행을 제외한 각 용도별 증감 폭 데이터 추출
+    df_wf = df_summary.drop('총계')
+
+    wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
+    wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
+    wf_values = [plan_tot] + df_wf['증감_합계'].tolist() + [act_tot]
+
+    # 가독성을 위해 증감이 0인 용도는 텍스트 미표기
+    text_labels = [f"{plan_tot:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf['증감_합계']] + [f"{act_tot:,.0f}"]
+
+    fig_wf = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=wf_measures,
+        x=wf_labels,
+        y=wf_values,
+        text=text_labels,
+        textposition="outside",
+        decreasing={"marker":{"color":"#ff7f0e"}}, # 감소는 주황/빨강
+        increasing={"marker":{"color":"#1f77b4"}}, # 증가는 파랑
+        totals={"marker":{"color":"#2ca02c"}}      # 총합은 초록
+    ))
+    fig_wf.update_layout(title="당초 계획 대비 증감 물량 원인 브릿지", margin=dict(t=40, b=40))
+    st.plotly_chart(fig_wf, use_container_width=True)
+
+    st.markdown("---")
+
+    # ==========================================
+    # 💡 3. 스마트 요약 테이블 (Heatmap 적용)
+    # ==========================================
+    st.markdown("#### 🚥 실천사업계획 요약 테이블 (Heatmap)")
     
-    st.markdown("""
-    **💡 Han형님을 위한 One page 구성 제안!**
+    # 엑셀과 비슷한 형태로 컬럼 재배치
+    table_cols = [
+        '당초_1~3월', '당초_4~12월', '당초_합계',
+        '변경_1~3월', '변경_4~12월', '변경_합계',
+        '증감_합계', '달성률(%)'
+    ]
+    df_display = df_summary[table_cols].copy()
     
-    올려주신 엑셀 표의 핵심은 **'당초(계획) 대비 얼마나 변경(예상실적)되었으며, 그 차이가 1분기(1~3월)와 나머지(4~12월) 중 어디서 발생했는가'**입니다. 이를 경영진 보고용으로 깔끔하게 보여주기 위해 아래 4가지 시각화를 제안합니다.
+    # 포맷팅 딕셔너리 생성
+    format_dict = {c: "{:,.0f}" for c in table_cols if c != '달성률(%)'}
+    format_dict['달성률(%)'] = "{:,.1f}%"
     
-    1. **🎯 핵심 KPI 요약 카드 (Top Row)**
-       - 상단에 `당초 총계`, `변경 총계`, `총 증감량(GJ)`, `총 달성률(%)`을 큰 텍스트(`st.metric`)로 배치하여 가장 궁금해하는 결론부터 직관적으로 보여줍니다.
-       
-    2. **🌊 증감 요인 폭포수 차트 (Waterfall Chart)**
-       - '당초 전체 합계' 막대에서 출발하여 가정용, 일반용, 산업용 등 각 용도별 증감 폭(+, -)을 거쳐 최종 '변경(실천) 합계'에 도달하는 과정을 계단식으로 보여줍니다. 물량 변동의 원인을 브리핑하기에 가장 완벽한 차트입니다.
-       
-    3. **🚥 스마트 요약 테이블 (히트맵 적용)**
-       - 첨부해주신 엑셀 표(1~3월, 4~12월, 합계)를 화면에 그대로 구현하되, **증감(변경-당초)** 열에서 물량이탈(-)이 크게 발생한 셀은 붉은색, 초과달성(+)한 셀은 푸른색으로 자동 음영 처리되게 만듭니다. 숫자를 일일이 읽지 않아도 시선이 바로 문제점으로 향합니다.
-       
-    4. **📊 용도별 1~3월 vs 4~12월 비중 비교 차트 (가로 누적 막대)**
-       - 각 주요 용도(가정용, 영업용, 산업용 등)별로 변경된 총물량 안에서 1~3월(이미 확정된 실적)이 차지하는 비중과 4~12월(앞으로 달성해야 할 계획)이 차지하는 비중을 가로 막대로 직관적으로 대비시켜 줍니다.
-    """)
+    styled_df = df_display.style.format(format_dict)
     
-    st.info("👈 좌측 메뉴에서 '1. Basic report'를 누르시면 기존 대시보드를 그대로 이용하실 수 있습니다. 위 아이디어 중 마음에 드시는 구성을 골라주시면 바로 파이썬 코드로 구현해 드릴게요!")
+    # 증감_합계 열에 Heatmap 그라데이션 적용 (파란색=증가, 빨간색=감소)
+    max_abs = max(abs(df_wf['증감_합계'].max()), abs(df_wf['증감_합계'].min()))
+    if max_abs == 0: max_abs = 1 # 0 division 방지
+    styled_df = styled_df.background_gradient(subset=['증감_합계'], cmap='RdBu', vmin=-max_abs, vmax=max_abs)
+    
+    st.dataframe(styled_df, use_container_width=True)
+
+    st.markdown("---")
+
+    # ==========================================
+    # 💡 4. 기간별 물량 구성비 차트 (가로 누적 막대)
+    # ==========================================
+    st.markdown("#### 📊 변경(예상실적) 기준 1~3월 vs 4~12월 비중")
+    
+    a2026['기간'] = a2026['월'].apply(lambda x: '1~3월 실적' if x <= 3 else '4~12월 예상')
+    bar_grp = a2026.groupby(['그룹', '기간'])['값'].sum().reset_index()
+    
+    # 카테고리가 위에서부터 올바른 순서로 출력되도록 역순 배치
+    current_g = a2026['그룹'].unique()
+    v_ord = [g for g in ORDER_LIST if g in current_g]
+    r_ord = [g for g in current_g if g not in v_ord]
+    f_ord = v_ord + r_ord
+    
+    fig_bar_h = px.bar(bar_grp, x='값', y='그룹', color='기간', orientation='h', text_auto=',.0f',
+                       category_orders={"그룹": f_ord[::-1]},
+                       color_discrete_map={"1~3월 실적": "#1f77b4", "4~12월 예상": "#aec7e8"})
+    fig_bar_h.update_layout(title=f"각 용도별 1~3월과 4~12월 물량 구성비 (단위: {unit})", barmode='stack')
+    st.plotly_chart(fig_bar_h, use_container_width=True)
 
 
 # ─────────────────────────────────────────────────────────
@@ -396,8 +540,8 @@ def main():
     with st.sidebar:
         st.header("⚙️ 메뉴 및 기본 설정")
         
-        # 👉 탭 역할을 할 라디오 버튼 메뉴 추가
-        menu = st.radio("📋 탭 선택", ["1. Basic report", "2. One page review"])
+        # 👉 탭 역할을 할 라디오 버튼 추가
+        menu = st.radio("📋 보고서 탭 선택", ["1. Basic report", "2. One page review"])
         st.markdown("---")
         
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
@@ -443,16 +587,17 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
-            if "GJ" in unit:
-                df_final['값'] = df_final['값'] / 1000
-            elif "부피" in unit:
-                df_final['값'] = df_final['값'] / heating_value / 1000
-            
-            # 👉 메뉴 선택에 따라 보여주는 화면 분기
+            # 👉 메뉴 선택에 따라 화면 분기
             if menu == "1. Basic report":
+                if "GJ" in unit:
+                    df_final['값'] = df_final['값'] / 1000
+                elif "부피" in unit:
+                    df_final['값'] = df_final['값'] / heating_value / 1000
                 render_simple_dashboard(df_final, unit, long_plan=long_plan, long_action=long_action, heating_value=heating_value)
+            
             elif menu == "2. One page review":
-                render_one_page_review()
+                # One page review 내부에서 필터링과 단위를 제어하므로 원본 데이터를 넘깁니다.
+                render_one_page_review(long_plan, long_action, unit, heating_value)
                 
         else:
             st.warning("⚠️ 유효한 실적 데이터를 추출하지 못했습니다. 파일 구조를 확인해주세요.")
