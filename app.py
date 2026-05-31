@@ -92,6 +92,7 @@ def make_long_data(df, label):
 
     for col in df.columns:
         if col in exclude_cols: continue
+        # 오차 방지를 위해 round() 제거. 원본 데이터 소수점 그대로 가져와서 합산
         val_series = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if val_series.sum() == 0: continue
 
@@ -468,7 +469,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     format_dict = {c: "{:,.0f}" for c in table_cols if c != '달성률(%)'}
     format_dict['달성률(%)'] = "{:,.1f}%"
     
-    # 💥 에러 방지: matplotlib 의존성(background_gradient)을 제거하고, 파이썬 기본 스타일링 함수를 적용
     def custom_heatmap(val):
         if pd.isna(val) or val == 0:
             return ''
@@ -498,7 +498,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     a2026_bar['구분_차트'] = '예상실적'
     
     df_bar_comb = pd.concat([p2026_bar, a2026_bar])
-    # 사용자가 원한 정확한 범례(단추) 명칭 적용
+    # 👉 사용자가 원한 정확한 범례(단추) 명칭 적용
     df_bar_comb['기간'] = df_bar_comb['월'].apply(lambda x: '1~3월(실적)' if x <= 3 else '4~12월(계획)')
     
     bar_grp = df_bar_comb.groupby(['그룹', '구분_차트', '기간'])['값'].sum().reset_index()
@@ -508,18 +508,20 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     r_ord = [g for g in current_g if g not in v_ord]
     f_ord = v_ord + r_ord
     
-    # 1) 가정용 단독 그래프
+    # 👉 1) 가정용 단독 그래프 (상단 막대가 '당초계획', 하단 막대가 '예상실적')
     st.markdown("##### 🏠 가정용 비교")
     df_home = bar_grp[bar_grp['그룹'] == '가정용'].copy()
     df_home['y_label'] = df_home['구분_차트']
     
     fig_home = px.bar(df_home, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
-                      category_orders={"y_label": ["예상실적", "당초계획"]},
+                      # Plotly는 리스트의 첫 항목을 맨 아래(bottom)에 그립니다.
+                      # 따라서 '당초계획'이 위쪽에 나오려면 '예상실적'을 먼저 넣어줍니다.
+                      category_orders={"y_label": ["예상실적", "당초계획"], "기간": ["1~3월(실적)", "4~12월(계획)"]},
                       color_discrete_map={"1~3월(실적)": "#1f77b4", "4~12월(계획)": "#aec7e8"})
     fig_home.update_layout(barmode='stack', yaxis_title="", height=200, margin=dict(t=30, b=30))
     st.plotly_chart(fig_home, use_container_width=True)
     
-    # 2) 가정용 외 그래프
+    # 👉 2) 가정용 외 그래프 (표 순서대로 나열 + 상단 막대가 '당초계획')
     st.markdown("##### 🏢 가정용 외 용도 비교")
     df_others = bar_grp[bar_grp['그룹'] != '가정용'].copy()
     
@@ -527,12 +529,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_others['y_label'] = df_others.apply(lambda r: f"{r['그룹']} ({r['구분_차트']})", axis=1)
     
     y_orders = []
+    # 표 순서(영업용 -> ... -> 수송용)가 위에서 아래로 나오게 하려면 역순으로 Y축 카테고리를 구성해야 함
     for g in reversed(f_ord):
         if g != '가정용':
+            # 각 용도 내에서도 '당초계획'이 상단에 나오게 하려면 '예상실적'을 먼저(아래에) 넣음
             y_orders.extend([f"{g} (예상실적)", f"{g} (당초계획)"])
             
     fig_others = px.bar(df_others, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
-                        category_orders={"y_label": y_orders},
+                        category_orders={"y_label": y_orders, "기간": ["1~3월(실적)", "4~12월(계획)"]},
                         color_discrete_map={"1~3월(실적)": "#1f77b4", "4~12월(계획)": "#aec7e8"})
     
     fig_height = max(300, len(y_orders) * 35) # 용도가 많아도 찌그러지지 않게 높이 자동 계산
