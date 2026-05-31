@@ -108,7 +108,7 @@ def make_long_data(df, label):
     return pd.concat(records, ignore_index=True)
 
 # ─────────────────────────────────────────────────────────
-# 🟢 4-1. 심플 대시보드 렌더링 (Basic report)
+# 🟢 4-1. 심플 대시보드 렌더링 (Basic report -> 세부내용)
 # ─────────────────────────────────────────────────────────
 def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_value=42.563):
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
@@ -341,7 +341,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 
 
 # ─────────────────────────────────────────────────────────
-# 🟢 4-2. One Page Review 렌더링 (2번 탭)
+# 🟢 4-2. One Page Review 렌더링 (1번 탭)
 # ─────────────────────────────────────────────────────────
 def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.subheader(f"📑 2026년 DSE 예상실적(실천사업계획) 요약 보고서 ({unit})")
@@ -385,7 +385,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
     df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
 
-    # 1. 핵심 KPI 요약 카드 (영문 제거 반영)
+    # 1. 핵심 KPI 요약 카드
     st.markdown("#### 🎯 2026년 핵심 요약")
     plan_tot = df_summary.loc['총계', '당초_합계']
     act_tot = df_summary.loc['총계', '변경_합계']
@@ -400,7 +400,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
 
     # ==========================================
-    # 💡 2. 폭포수 차트 (동적 기간 조회 및 Y축 여백 안정화 적용)
+    # 💡 2. 폭포수 차트
     # ==========================================
     st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
     
@@ -418,17 +418,19 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     plan_val_wf = df_summary.loc['총계', col_plan_wf]
     act_val_wf = df_summary.loc['총계', col_act_wf]
     
-    wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
+    # 텍스트 변경: 당초계획 / 예상실적
+    wf_labels = ["당초계획"] + df_wf.index.tolist() + ["예상실적"]
     wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
     wf_values = [plan_val_wf] + df_wf[col_diff_wf].tolist() + [act_val_wf]
     text_labels = [f"{plan_val_wf:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf[col_diff_wf]] + [f"{act_val_wf:,.0f}"]
 
+    # 0인 항목들을 이어주는 회색 실선(connector) 추가
     fig_wf = go.Figure(go.Waterfall(
         orientation="v", measure=wf_measures, x=wf_labels, y=wf_values, text=text_labels, textposition="outside",
-        decreasing={"marker":{"color":"#ff7f0e"}}, increasing={"marker":{"color":"#1f77b4"}}, totals={"marker":{"color":"#2ca02c"}}      
+        decreasing={"marker":{"color":"#ff7f0e"}}, increasing={"marker":{"color":"#1f77b4"}}, totals={"marker":{"color":"#2ca02c"}},
+        connector={"line": {"color": "gray", "width": 1.5, "dash": "solid"}} 
     ))
     
-    # Y축 범위 최적화 (2% 상하단 여백 추가로 안정감 부여)
     running_vals = [plan_val_wf]
     current_val = plan_val_wf
     for v in df_wf[col_diff_wf]:
@@ -437,7 +439,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     running_vals.append(act_val_wf)
     
     y_min, y_max = min(running_vals), max(running_vals)
-    padding = max(y_max * 0.02, 1) # 2% 여백
+    padding = max(y_max * 0.02, 1)
     
     fig_wf.update_layout(title=f"당초 계획 대비 용도별 증감 브릿지 ({wf_period})", margin=dict(t=40, b=40))
     fig_wf.update_yaxes(range=[y_min - padding, y_max + padding]) 
@@ -446,9 +448,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
 
     # ==========================================
-    # 💡 3. 스마트 요약 테이블
+    # 💡 3. 스마트 요약 테이블 (단위 추가)
     # ==========================================
-    st.markdown("#### 🚥 실천사업계획 요약 테이블")
+    st.markdown(f"#### 🚥 실천사업계획 요약 테이블 (단위: {unit})")
     table_cols = [
         '당초_1~3월', '당초_4~12월', '당초_합계',
         '변경_1~3월', '변경_4~12월', '변경_합계',
@@ -471,9 +473,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
     
     # ==========================================
-    # 💡 4. 계획대비 예상실적 (Bullet 형태 - 높이 30% 증가 및 균일화)
+    # 💡 4. 계획대비 예상실적
     # ==========================================
-    st.markdown(f"#### 🎯 계획대비 예상실적 (기간별 세부 현황)")
+    st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
     period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~3월", "4~12월"], horizontal=True, key="period_sel")
     
@@ -489,7 +491,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_perf['차이'] = df_perf['실적'] - df_perf['계획']
     df_perf['달성률'] = (df_perf['실적'] / df_perf['계획'] * 100).fillna(0)
     
-    # [파트1] 데이터
     df_perf_total = df_perf.loc[['총계']]
     df_perf_home = df_perf.loc[['가정용']] if '가정용' in df_perf.index else pd.DataFrame()
     
@@ -505,16 +506,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     part1_df = pd.concat([df_perf_total, df_perf_home, others_row])
     part1_df = part1_df.iloc[::-1]
 
-    # [파트2] 데이터
     part2_df = df_perf.loc[others_mask]
     part2_df = part2_df.iloc[::-1]
     
-    # 🔥 함수 내부에 차트 높이 계산식을 넣어서 두께를 완벽히 통일시켰습니다 (항목당 80px 배정)
     def draw_bullet_chart(df_data, show_legend=False):
         fig = go.Figure()
         
         fig.add_trace(go.Bar(
-            y=df_data.index, x=df_data['계획'], name='당초 계획', orientation='h',
+            y=df_data.index, x=df_data['계획'], name='당초계획', orientation='h',
             marker_color='#e2e6ea', width=0.8, hoverinfo='x+name'
         ))
         
@@ -541,7 +540,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         
         fig.add_annotation(x=0.98, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
         
-        # 💡 막대 항목당 80px의 높이를 할당하여 30%가량 두꺼워지게 만들고, 파트1과 파트2에 동일하게 적용
         calculated_height = len(df_data) * 80 + 80 
         
         fig.update_layout(
@@ -555,14 +553,13 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         )
         return fig
 
-    # [파트1] 렌더링 (한글 설명 제거)
-    st.markdown("##### 📌 [파트1]")
+    # 소제목 변경: [요약], [세부용도]
+    st.markdown("##### 📌 [요약]")
     fig_part1 = draw_bullet_chart(part1_df, show_legend=True)
     st.plotly_chart(fig_part1, use_container_width=True)
 
-    # [파트2] 렌더링 (한글 설명 제거)
     if not part2_df.empty:
-        st.markdown("##### 📌 [파트2]")
+        st.markdown("##### 📌 [세부용도]")
         fig_part2 = draw_bullet_chart(part2_df, show_legend=False)
         st.plotly_chart(fig_part2, use_container_width=True)
 
@@ -575,7 +572,8 @@ def main():
     
     with st.sidebar:
         st.header("⚙️ 메뉴 및 기본 설정")
-        menu = st.radio("📋 보고서 탭 선택", ["1. Basic report", "2. One page review"])
+        # 탭 순서 변경 (One page review를 먼저)
+        menu = st.radio("📋 보고서 탭 선택", ["1. One page review", "2. 세부내용"])
         st.markdown("---")
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
         
@@ -619,12 +617,13 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
-            if menu == "1. Basic report":
+            # 실행 순서 변경
+            if menu == "2. 세부내용":
                 if "GJ" in unit: df_final['값'] = df_final['값'] / 1000
                 elif "부피" in unit: df_final['값'] = df_final['값'] / heating_value / 1000
                 render_simple_dashboard(df_final, unit, long_plan=long_plan, long_action=long_action, heating_value=heating_value)
             
-            elif menu == "2. One page review":
+            elif menu == "1. One page review":
                 render_one_page_review(long_plan, long_action, unit, heating_value)
                 
         else:
