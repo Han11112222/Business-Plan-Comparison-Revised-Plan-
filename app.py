@@ -92,7 +92,6 @@ def make_long_data(df, label):
 
     for col in df.columns:
         if col in exclude_cols: continue
-        # 오차 방지를 위해 round() 제거. 원본 데이터 소수점 그대로 가져와서 합산
         val_series = pd.to_numeric(df[col], errors='coerce').fillna(0)
         if val_series.sum() == 0: continue
 
@@ -382,7 +381,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         df['기간'] = df['월'].apply(lambda x: '1~3월' if x <= 3 else '4~12월')
         pivot = df.pivot_table(index='그룹', columns='기간', values='값', aggfunc='sum').fillna(0)
         
-        # 데이터가 비어있을 경우 방어 코드
         for col in ['1~3월', '4~12월']:
             if col not in pivot.columns: pivot[col] = 0
             
@@ -428,17 +426,28 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
 
     # ==========================================
-    # 💡 2. 기간별 증감 요인 폭포수 차트 (Waterfall)
+    # 💡 2. 증감 요인 폭포수 차트 (Waterfall)
     # ==========================================
-    st.markdown("#### 🌊 기간별 증감 요인 폭포수 차트 (Waterfall)")
-    # 세세한 카테고리 대신 1~3월과 4~12월로 단순화하여 가독성 대폭 향상
-    diff_1_3_tot = df_summary.loc['총계', '증감_1~3월']
-    diff_4_12_tot = df_summary.loc['총계', '증감_4~12월']
-
-    wf_labels = ["당초 계획 합계", "1~3월 실적반영 (증감)", "4~12월 계획수정 (증감)", "변경 예상 합계"]
-    wf_measures = ["absolute", "relative", "relative", "total"]
-    wf_values = [plan_tot, diff_1_3_tot, diff_4_12_tot, act_tot]
-    text_labels = [f"{v:,.0f}" for v in wf_values]
+    st.markdown("#### 🌊 증감 요인 폭포수 차트 (Waterfall)")
+    
+    # 👉 스위치 버튼 추가: 용도별 vs 기간별
+    wf_view = st.radio("🔘 차트 구분 선택", ["용도별 구분", "기간별 구분 (1~3월 실적, 4~12월 계획)"], horizontal=True, key="wf_view_radio")
+    
+    if wf_view == "용도별 구분":
+        df_wf = df_summary.drop('총계')
+        wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
+        wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
+        wf_values = [plan_tot] + df_wf['증감_합계'].tolist() + [act_tot]
+        text_labels = [f"{plan_tot:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf['증감_합계']] + [f"{act_tot:,.0f}"]
+        chart_title = "당초 계획 대비 용도별 증감 브릿지"
+    else:
+        diff_1_3_tot = df_summary.loc['총계', '증감_1~3월']
+        diff_4_12_tot = df_summary.loc['총계', '증감_4~12월']
+        wf_labels = ["당초 계획 합계", "1~3월 실적반영 (증감)", "4~12월 계획수정 (증감)", "변경 예상 합계"]
+        wf_measures = ["absolute", "relative", "relative", "total"]
+        wf_values = [plan_tot, diff_1_3_tot, diff_4_12_tot, act_tot]
+        text_labels = [f"{v:,.0f}" for v in wf_values]
+        chart_title = "당초 계획 대비 기간별 1~3월 및 4~12월 증감 브릿지"
 
     fig_wf = go.Figure(go.Waterfall(
         orientation="v",
@@ -451,17 +460,16 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         increasing={"marker":{"color":"#1f77b4"}}, # 증가는 파란색
         totals={"marker":{"color":"#2ca02c"}}      # 총합은 초록색
     ))
-    fig_wf.update_layout(title="당초 계획 대비 기간별 1~3월 및 4~12월 증감 브릿지", margin=dict(t=40, b=40))
+    fig_wf.update_layout(title=chart_title, margin=dict(t=40, b=40))
     st.plotly_chart(fig_wf, use_container_width=True)
 
     st.markdown("---")
 
     # ==========================================
-    # 💡 3. 스마트 요약 테이블 (Heatmap 적용 및 에러 수정)
+    # 💡 3. 스마트 요약 테이블 (에러 수정)
     # ==========================================
-    st.markdown("#### 🚥 실천사업계획 요약 테이블 (Heatmap)")
+    st.markdown("#### 🚥 실천사업계획 요약 테이블")
     
-    # 엑셀과 비슷한 형태로 컬럼 재배치 및 기간별 증감 포함
     table_cols = [
         '당초_1~3월', '당초_4~12월', '당초_합계',
         '변경_1~3월', '변경_4~12월', '변경_합계',
@@ -469,17 +477,23 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     ]
     df_display = df_summary[table_cols].copy()
     
-    # 포맷팅 딕셔너리 생성
     format_dict = {c: "{:,.0f}" for c in table_cols if c != '달성률(%)'}
     format_dict['달성률(%)'] = "{:,.1f}%"
     
-    # 💥 에러 방지 핵심: background_gradient를 먼저 적용하고, 그 다음에 format을 적용해야 함
-    max_abs = max(abs(df_summary['증감_합계'].max()), abs(df_summary['증감_합계'].min()))
-    if max_abs == 0: max_abs = 1 # 0 division 방지
-    
-    styled_df = df_display.style.background_gradient(
-        subset=['증감_합계'], cmap='RdBu', vmin=-max_abs, vmax=max_abs
-    ).format(format_dict)
+    # 💥 에러 방지: matplotlib 의존성(background_gradient)을 제거하고, 파이썬 기본 스타일링 함수를 적용
+    def custom_heatmap(val):
+        if pd.isna(val) or val == 0:
+            return ''
+        elif val > 0:
+            return 'background-color: #e6f2ff; color: #0055a4;' # 연한 파랑 배경, 파란 글씨
+        else:
+            return 'background-color: #ffe6e6; color: #cc0000;' # 연한 빨강 배경, 붉은 글씨
+
+    # pandas 버전에 맞춰 호환되도록 applymap/map 사용
+    try:
+        styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
+    except:
+        styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
     
     st.dataframe(styled_df, use_container_width=True)
 
@@ -493,7 +507,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     a2026['기간'] = a2026['월'].apply(lambda x: '1~3월 실적' if x <= 3 else '4~12월 예상')
     bar_grp = a2026.groupby(['그룹', '기간'])['값'].sum().reset_index()
     
-    # 카테고리가 위에서부터 올바른 순서로 출력되도록 역순 배치
     current_g = a2026['그룹'].unique()
     v_ord = [g for g in ORDER_LIST if g in current_g]
     r_ord = [g for g in current_g if g not in v_ord]
@@ -515,7 +528,6 @@ def main():
     with st.sidebar:
         st.header("⚙️ 메뉴 및 기본 설정")
         
-        # 👉 탭 역할을 할 라디오 버튼 메뉴 추가
         menu = st.radio("📋 보고서 탭 선택", ["1. Basic report", "2. One page review"])
         st.markdown("---")
         
@@ -562,7 +574,6 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
-            # 👉 메뉴 선택에 따라 화면 분기
             if menu == "1. Basic report":
                 if "GJ" in unit:
                     df_final['값'] = df_final['값'] / 1000
@@ -571,7 +582,6 @@ def main():
                 render_simple_dashboard(df_final, unit, long_plan=long_plan, long_action=long_action, heating_value=heating_value)
             
             elif menu == "2. One page review":
-                # One page review 내부에서 단위 변환을 자체 처리하므로 원본을 넘깁니다.
                 render_one_page_review(long_plan, long_action, unit, heating_value)
                 
         else:
