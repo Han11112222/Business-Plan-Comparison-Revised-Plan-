@@ -113,9 +113,6 @@ def make_long_data(df, label):
 def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_value=42.563):
     st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
     
-    # ==========================================
-    # 1️⃣ 2026년 계획 vs 예상실적 비교
-    # ==========================================
     st.markdown("### 1️⃣ 2026년 계획 vs 예상실적 비교")
     
     if long_plan is not None and long_action is not None and not long_plan.empty and not long_action.empty:
@@ -230,7 +227,6 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     st.markdown("---")
     
     df['연'] = df['연'].astype(int)
-    
     order_dict = {"실적": 1, "계획": 2, "예상실적": 3}
     df['sort_key'] = df['연'] * 10 + df['구분'].map(order_dict)
     df = df.sort_values(['sort_key', '월'])
@@ -245,11 +241,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 
     years = sorted(df['연'].unique().tolist())
     
-    # ==========================================
-    # 2️⃣ 중간: 전체량 분석
-    # ==========================================
     st.markdown("### 2️⃣ 전체량 분석")
-    
     default_years_1 = years[-5:] if len(years) >= 5 else years
     
     col_y1, col_t1 = st.columns(2)
@@ -307,10 +299,6 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
         st.dataframe(piv1.style.format("{:,.0f}"), use_container_width=True)
 
     st.markdown("---")
-
-    # ==========================================
-    # 3️⃣ 하단: 용도별 분석
-    # ==========================================
     st.markdown("### 3️⃣ 용도별 구성 분석")
     
     default_years_2 = [y for y in years if y in [2025, 2026]]
@@ -324,13 +312,11 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
     
     if selected_years_2 and selected_types_2:
         df_filt2 = df[df['연'].isin(selected_years_2) & df['구분'].isin(selected_types_2)]
-        
         filtered_x_labels_2 = [x for x in unique_x_labels if int(x[:4]) in selected_years_2 and any(t in x for t in selected_types_2)]
 
         selected_group = st.radio("📂 조회할 용도 선택", options=final_group_order, index=0, horizontal=True, key="rb_group_sec3")
 
         st.markdown("#### 📈 연도/구분별 용도 꺾은선 추이 (월별 비교)")
-        
         df_fig3 = df_filt2[df_filt2['그룹'] == selected_group]
         sec2_mon_grp = df_fig3.groupby(['연_구분', '월'])['값'].sum().reset_index()
         
@@ -364,7 +350,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         st.warning("데이터가 부족합니다. 공급량_사업계획 및 공급량_실천사업계획 데이터를 확인해주세요.")
         return
         
-    # 1. 2026년 데이터만 필터링 및 단위 변환
     p2026 = long_plan[long_plan['연'] == 2026].copy()
     a2026 = long_action[long_action['연'] == 2026].copy()
 
@@ -376,14 +361,11 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     p2026 = apply_unit(p2026)
     a2026 = apply_unit(a2026)
 
-    # 2. 그룹별/기간별 집계 함수 (1~3월, 4~12월)
     def agg_data(df, prefix):
         df['기간'] = df['월'].apply(lambda x: '1~3월' if x <= 3 else '4~12월')
         pivot = df.pivot_table(index='그룹', columns='기간', values='값', aggfunc='sum').fillna(0)
-        
         for col in ['1~3월', '4~12월']:
             if col not in pivot.columns: pivot[col] = 0
-            
         pivot['합계'] = pivot['1~3월'] + pivot['4~12월']
         pivot.columns = [f'{prefix}_{c}' for c in pivot.columns]
         return pivot
@@ -391,26 +373,19 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_p = agg_data(p2026, '당초')
     df_a = agg_data(a2026, '변경')
 
-    # 데이터 병합
     df_summary = pd.concat([df_p, df_a], axis=1).fillna(0)
-
-    # ORDER_LIST에 맞게 행 정렬
     valid_order = [g for g in ORDER_LIST if g in df_summary.index]
     rest = [g for g in df_summary.index if g not in valid_order]
     df_summary = df_summary.reindex(valid_order + rest)
 
-    # 총계 행 추가
     df_summary.loc['총계'] = df_summary.sum()
 
-    # 기간별 증감 및 달성률 계산
     df_summary['증감_1~3월'] = df_summary['변경_1~3월'] - df_summary['당초_1~3월']
     df_summary['증감_4~12월'] = df_summary['변경_4~12월'] - df_summary['당초_4~12월']
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
     df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
 
-    # ==========================================
-    # 💡 1. 핵심 KPI 요약 카드
-    # ==========================================
+    # 1. 핵심 KPI 요약 카드
     st.markdown("#### 🎯 2026년 핵심 요약 (Total KPI)")
     plan_tot = df_summary.loc['총계', '당초_합계']
     act_tot = df_summary.loc['총계', '변경_합계']
@@ -422,14 +397,10 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     col2.metric("② 변경(예상) 총계", f"{act_tot:,.0f}")
     col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f}", delta=f"{diff_tot:,.0f}", delta_color="normal")
     col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
-
     st.markdown("---")
 
-    # ==========================================
-    # 💡 2. 증감 요인 폭포수 차트 (Waterfall)
-    # ==========================================
+    # 2. 폭포수 차트
     st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
-    
     df_wf = df_summary.drop('총계')
     wf_labels = ["당초 계획 합계"] + df_wf.index.tolist() + ["변경 예상 합계"]
     wf_measures = ["absolute"] + ["relative"] * len(df_wf) + ["total"]
@@ -437,67 +408,41 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     text_labels = [f"{plan_tot:,.0f}"] + [f"{v:,.0f}" if v != 0 else "" for v in df_wf['증감_합계']] + [f"{act_tot:,.0f}"]
 
     fig_wf = go.Figure(go.Waterfall(
-        orientation="v",
-        measure=wf_measures,
-        x=wf_labels,
-        y=wf_values,
-        text=text_labels,
-        textposition="outside",
-        decreasing={"marker":{"color":"#ff7f0e"}}, 
-        increasing={"marker":{"color":"#1f77b4"}}, 
-        totals={"marker":{"color":"#2ca02c"}}      
+        orientation="v", measure=wf_measures, x=wf_labels, y=wf_values, text=text_labels, textposition="outside",
+        decreasing={"marker":{"color":"#ff7f0e"}}, increasing={"marker":{"color":"#1f77b4"}}, totals={"marker":{"color":"#2ca02c"}}      
     ))
     fig_wf.update_layout(title="당초 계획 대비 용도별 증감 브릿지", margin=dict(t=40, b=40))
     st.plotly_chart(fig_wf, use_container_width=True)
-
     st.markdown("---")
 
-    # ==========================================
-    # 💡 3. 스마트 요약 테이블
-    # ==========================================
+    # 3. 요약 테이블
     st.markdown("#### 🚥 실천사업계획 요약 테이블")
-    
     table_cols = [
         '당초_1~3월', '당초_4~12월', '당초_합계',
         '변경_1~3월', '변경_4~12월', '변경_합계',
         '증감_1~3월', '증감_4~12월', '증감_합계', '달성률(%)'
     ]
     df_display = df_summary[table_cols].copy()
-    
     format_dict = {c: "{:,.0f}" for c in table_cols if c != '달성률(%)'}
     format_dict['달성률(%)'] = "{:,.1f}%"
     
     def custom_heatmap(val):
-        if pd.isna(val) or val == 0:
-            return ''
-        elif val > 0:
-            return 'background-color: #e6f2ff; color: #0055a4;'
-        else:
-            return 'background-color: #ffe6e6; color: #cc0000;'
+        if pd.isna(val) or val == 0: return ''
+        elif val > 0: return 'background-color: #e6f2ff; color: #0055a4;'
+        else: return 'background-color: #ffe6e6; color: #cc0000;'
 
-    try:
-        styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
-    except:
-        styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
-    
+    try: styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
+    except: styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).format(format_dict)
     st.dataframe(styled_df, use_container_width=True)
-
     st.markdown("---")
 
-    # ==========================================
-    # 💡 4. 기간별 물량 구성비 차트 (가로 누적 막대) - 가정용/가정용 외 분리
-    # ==========================================
+    # 4. 기간별 물량 구성비 차트 (오류 완벽 수정본)
     st.markdown("#### 📊 당초계획 vs 예상실적 기간별 비중 비교 (가정용 / 가정용 외 분리)")
-    
-    p2026_bar = p2026.copy()
-    a2026_bar = a2026.copy()
-    
+    p2026_bar, a2026_bar = p2026.copy(), a2026.copy()
     p2026_bar['구분_차트'] = '당초계획'
     a2026_bar['구분_차트'] = '예상실적'
-    
     df_bar_comb = pd.concat([p2026_bar, a2026_bar])
     
-    # 🔥 기간 명칭: 요청하신 '당초', '변경'으로 명확하게 수정
     def set_period(row):
         if row['구분_차트'] == '당초계획':
             return '1~3월(당초)' if row['월'] <= 3 else '4~12월(당초)'
@@ -505,7 +450,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
             return '1~3월(변경)' if row['월'] <= 3 else '4~12월(변경)'
             
     df_bar_comb['기간'] = df_bar_comb.apply(set_period, axis=1)
-    
     bar_grp = df_bar_comb.groupby(['그룹', '구분_차트', '기간'])['값'].sum().reset_index()
     
     current_g = df_bar_comb['그룹'].unique()
@@ -519,26 +463,26 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     }
     period_orders = ["1~3월(당초)", "4~12월(당초)", "1~3월(변경)", "4~12월(변경)"]
     
-    # 💡 1) 가정용 단독 그래프
+    # 가정용 비교 
     st.markdown("##### 🏠 가정용 비교")
     df_home = bar_grp[bar_grp['그룹'] == '가정용'].copy()
     df_home['y_label'] = df_home['구분_차트']
     
+    # 🔥 리스트 순서 정방향 배치 + autorange="reversed" 조합으로 무조건 당초가 상단 고정!
     fig_home = px.bar(df_home, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
                       category_orders={"y_label": ["당초계획", "예상실적"], "기간": period_orders},
                       color_discrete_map=color_map)
     fig_home.update_layout(barmode='stack', yaxis_title="", height=200, margin=dict(t=30, b=30))
-    # 🔥 이 옵션이 들어가야 위에서부터 '당초계획' -> '예상실적' 순서로 정렬됩니다!
-    fig_home.update_yaxes(autorange="reversed") 
+    fig_home.update_yaxes(autorange="reversed")
     st.plotly_chart(fig_home, use_container_width=True)
     
-    # 💡 2) 가정용 외 그래프
+    # 가정용 외 비교
     st.markdown("##### 🏢 가정용 외 용도 비교")
     df_others = bar_grp[bar_grp['그룹'] != '가정용'].copy()
     df_others['y_label'] = df_others.apply(lambda r: f"{r['그룹']} ({r['구분_차트']})", axis=1)
     
     y_orders = []
-    # 리스트를 정방향으로 만들고 아래에서 reversed 옵션을 적용합니다.
+    # 🔥 리스트 역순 배치 제거하고 순방향으로 깔끔하게 담습니다.
     for g in f_ord:
         if g != '가정용':
             y_orders.extend([f"{g} (당초계획)", f"{g} (예상실적)"])
@@ -546,12 +490,78 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     fig_others = px.bar(df_others, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
                         category_orders={"y_label": y_orders, "기간": period_orders},
                         color_discrete_map=color_map)
-    
     fig_height = max(300, len(y_orders) * 35) 
     fig_others.update_layout(barmode='stack', yaxis_title="", height=fig_height, margin=dict(t=30, b=30))
-    # 🔥 여기도 동일하게 Y축 역순 옵션 추가!
     fig_others.update_yaxes(autorange="reversed")
     st.plotly_chart(fig_others, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # ==========================================
+    # 💡 5. 신규: 계획대비 예상실적 (진도율 및 증감 분석 - Bullet 형태 오버레이)
+    # ==========================================
+    st.markdown("#### 🎯 계획대비 예상실적 (기간별 세부 현황)")
+    
+    period_sel = st.radio("조회 기간 선택", ["연간", "1~3월", "4~12월"], horizontal=True, key="period_sel")
+    
+    if period_sel == "연간":
+        col_plan, col_act = '당초_합계', '변경_합계'
+    elif period_sel == "1~3월":
+        col_plan, col_act = '당초_1~3월', '변경_1~3월'
+    else:
+        col_plan, col_act = '당초_4~12월', '변경_4~12월'
+        
+    df_perf = df_summary[[col_plan, col_act]].copy()
+    df_perf.columns = ['계획', '실적']
+    df_perf['차이'] = df_perf['실적'] - df_perf['계획']
+    # 0으로 나누는 에러 방지를 위해 fillna 처리
+    df_perf['달성률'] = (df_perf['실적'] / df_perf['계획'] * 100).fillna(0)
+    
+    # 총계 행과 용도별 행을 분리했다가, 총계를 맨 위에 두기 위해 순서 재조합
+    df_perf_total = df_perf.loc[['총계']]
+    df_perf_usage = df_perf.drop('총계')
+    plot_df = pd.concat([df_perf_total, df_perf_usage])
+    
+    # Plotly Y축 역방향 특성에 맞춰 데이터프레임 자체를 거꾸로 뒤집음
+    plot_df = plot_df.iloc[::-1]
+    
+    fig_perf = go.Figure()
+    
+    # 배경: 당초 계획 (넓고 옅은 회색 막대)
+    fig_perf.add_trace(go.Bar(
+        y=plot_df.index, x=plot_df['계획'], name='당초 계획', orientation='h',
+        marker_color='#e2e6ea', width=0.7, hoverinfo='x+name'
+    ))
+    
+    # 전경: 예상 실적 (얇고 진한 파란색 막대)
+    fig_perf.add_trace(go.Bar(
+        y=plot_df.index, x=plot_df['실적'], name='예상 실적', orientation='h',
+        marker_color='#1f77b4', width=0.4,
+        text=[f"{v:,.0f}" for v in plot_df['실적']],
+        textposition='inside', insidetextanchor='end', hoverinfo='x+name'
+    ))
+    
+    # 차트 우측에 차이(▲/▼) 및 달성률(%) 어노테이션(텍스트) 추가
+    for idx, row in plot_df.iterrows():
+        diff_text = f"▲ {row['차이']:,.0f}" if row['차이'] > 0 else (f"▼ {abs(row['차이']):,.0f}" if row['차이'] < 0 else "-")
+        diff_color = "#d62728" if row['차이'] < 0 else "#2ca02c"
+        rate_text = f"{row['달성률']:.1f}%"
+        
+        fig_perf.add_annotation(
+            y=idx, x=1.01, xref="paper", yref="y",
+            text=f"<span style='color:{diff_color}; font-size:14px'><b>{diff_text}</b></span> <span style='color:gray; font-size:12px'>({rate_text})</span>",
+            showarrow=False, xanchor="left", align="left"
+        )
+        
+    fig_perf.update_layout(
+        barmode='overlay', # 겹쳐서 그리는 핵심 옵션
+        height=max(400, len(plot_df) * 45),
+        xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title=""),
+        yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
+        margin=dict(r=150), # 우측 어노테이션이 잘리지 않도록 여백 확보
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    st.plotly_chart(fig_perf, use_container_width=True)
 
 
 # ─────────────────────────────────────────────────────────
@@ -562,10 +572,8 @@ def main():
     
     with st.sidebar:
         st.header("⚙️ 메뉴 및 기본 설정")
-        
         menu = st.radio("📋 보고서 탭 선택", ["1. Basic report", "2. One page review"])
         st.markdown("---")
-        
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
         
         heating_value = 42.563
@@ -605,15 +613,12 @@ def main():
         
         if not long_act.empty:
             df_final = pd.concat([long_act, long_plan, long_action], ignore_index=True)
-            
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
             if menu == "1. Basic report":
-                if "GJ" in unit:
-                    df_final['값'] = df_final['값'] / 1000
-                elif "부피" in unit:
-                    df_final['값'] = df_final['값'] / heating_value / 1000
+                if "GJ" in unit: df_final['값'] = df_final['값'] / 1000
+                elif "부피" in unit: df_final['값'] = df_final['값'] / heating_value / 1000
                 render_simple_dashboard(df_final, unit, long_plan=long_plan, long_action=long_action, heating_value=heating_value)
             
             elif menu == "2. One page review":
