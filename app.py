@@ -344,7 +344,6 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 # 🟢 4-2. One Page Review 렌더링 (1. One page review)
 # ─────────────────────────────────────────────────────────
 def render_one_page_review(long_plan, long_action, unit, heating_value):
-    # 상단 요약보고서 타이틀 삭제 요청 반영
     
     if long_plan.empty or long_action.empty:
         st.warning("데이터가 부족합니다. 공급량_사업계획 및 공급량_실천사업계획 데이터를 확인해주세요.")
@@ -378,7 +377,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     rest = [g for g in df_summary.index if g not in valid_order]
     df_summary = df_summary.reindex(valid_order + rest)
     
-    # 공란(빈 인덱스) 삭제 처리
     df_summary = df_summary[df_summary.index.astype(str).str.strip() != '']
     df_summary = df_summary.dropna(how='all')
 
@@ -389,8 +387,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
     df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
 
-    # 1. 핵심 내용 카드 (Total KPI 제거 반영)
-    st.markdown("#### 🎯 핵심내용")
+    st.markdown("#### 📈 핵심내용")
     plan_tot = df_summary.loc['총계', '당초_합계']
     act_tot = df_summary.loc['총계', '변경_합계']
     diff_tot = df_summary.loc['총계', '증감_합계']
@@ -482,7 +479,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown("---")
     
     # ==========================================
-    # 💡 4. 계획대비 예상실적
+    # 💡 4. 계획대비 예상실적 (여백 및 범례/단위 위치 수정본)
     # ==========================================
     st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
@@ -538,8 +535,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
             diff_color = "#d62728" if row['차이'] < 0 else "#2ca02c"
             rate_text = f"{row['달성률']:.1f}%"
             
+            # 🔥 1.05에서 1.02로 수정하여 텍스트를 막대 쪽으로 당김
             fig.add_annotation(
-                y=idx, x=1.05, xref="paper", yref="y",
+                y=idx, x=1.02, xref="paper", yref="y",
                 text=f"<span style='color:{diff_color}; font-size:14px'><b>{diff_text}</b></span> <span style='color:gray; font-size:13px'>({rate_text})</span>",
                 showarrow=False, xanchor="left", align="left"
             )
@@ -547,19 +545,22 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         max_val = max(df_data['계획'].max(), df_data['실적'].max())
         if max_val == 0: max_val = 1
         
-        fig.add_annotation(x=0.98, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
+        # 🔥 우측 상단 끝(막대 끝부분 라인)으로 단위 이동 (x=1.0)
+        fig.add_annotation(x=1.0, y=1.08, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
         
-        # 🔥 항목당 높이를 70픽셀로 줄여서 (기존 80 대비 10% 이상 축소) 스크롤 부담은 줄이되 두께감은 유지!
         calculated_height = len(df_data) * 70 + 80 
         
         fig.update_layout(
             barmode='overlay', 
             height=calculated_height,
-            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="", range=[0, max_val * 1.35]),
+            # 🔥 range를 줄여 막대가 차지하는 비율을 늘림 -> 결과적으로 우측 텍스트가 가까워짐
+            xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="", range=[0, max_val * 1.15]),
             yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
-            margin=dict(l=150, r=200, t=40, b=20),
+            # 🔥 margin 오른쪽(r)을 200에서 140으로 줄여 빈 공간 최소화
+            margin=dict(l=150, r=140, t=40, b=20),
             showlegend=show_legend,
-            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1) if show_legend else None
+            # 🔥 범례를 막대가 시작하는 왼쪽(x=0)으로 이동
+            legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0) if show_legend else None
         )
         return fig
 
@@ -581,7 +582,6 @@ def main():
     
     with st.sidebar:
         st.header("⚙️ 메뉴 및 기본 설정")
-        # 탭 순서 변경 (One page review를 1번으로 배치)
         menu = st.radio("📋 보고서 탭 선택", ["1. One page review", "2. 세부내용"])
         st.markdown("---")
         unit = st.radio("단위 선택", ["열량 (GJ)", "부피 (천m³)"], index=0)
@@ -626,7 +626,6 @@ def main():
             df_final['연'] = pd.to_numeric(df_final['연'], errors='coerce')
             df_final = df_final[df_final['연'] <= 2026]
             
-            # 메뉴 순서 변경 반영
             if menu == "2. 세부내용":
                 if "GJ" in unit: df_final['값'] = df_final['값'] / 1000
                 elif "부피" in unit: df_final['값'] = df_final['값'] / heating_value / 1000
