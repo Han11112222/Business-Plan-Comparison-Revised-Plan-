@@ -497,7 +497,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     
     df_bar_comb = pd.concat([p2026_bar, a2026_bar])
     
-    # 💡 수정: 기간명(범례)을 요청하신 내용으로 명확히 수정
+    # 🔥 기간 명칭: 요청하신 '당초', '변경'으로 명확하게 수정
     def set_period(row):
         if row['구분_차트'] == '당초계획':
             return '1~3월(당초)' if row['월'] <= 3 else '4~12월(당초)'
@@ -519,29 +519,29 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     }
     period_orders = ["1~3월(당초)", "4~12월(당초)", "1~3월(변경)", "4~12월(변경)"]
     
-    # 💡 가정용 단독 그래프 수정
+    # 💡 1) 가정용 단독 그래프
     st.markdown("##### 🏠 가정용 비교")
     df_home = bar_grp[bar_grp['그룹'] == '가정용'].copy()
     df_home['y_label'] = df_home['구분_차트']
     
-    # Plotly는 리스트의 첫 번째 항목을 맨 아래에 배치하므로 예상실적을 앞에 둡니다.
     fig_home = px.bar(df_home, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
-                      category_orders={"y_label": ["예상실적", "당초계획"], "기간": period_orders},
+                      category_orders={"y_label": ["당초계획", "예상실적"], "기간": period_orders},
                       color_discrete_map=color_map)
     fig_home.update_layout(barmode='stack', yaxis_title="", height=200, margin=dict(t=30, b=30))
+    # 🔥 이 옵션이 들어가야 위에서부터 '당초계획' -> '예상실적' 순서로 정렬됩니다!
+    fig_home.update_yaxes(autorange="reversed") 
     st.plotly_chart(fig_home, use_container_width=True)
     
-    # 💡 가정용 외 그래프 수정
+    # 💡 2) 가정용 외 그래프
     st.markdown("##### 🏢 가정용 외 용도 비교")
     df_others = bar_grp[bar_grp['그룹'] != '가정용'].copy()
     df_others['y_label'] = df_others.apply(lambda r: f"{r['그룹']} ({r['구분_차트']})", axis=1)
     
     y_orders = []
-    # 표 순서(영업용->...->수송용)가 위에서 아래로 나오게 하려면 역순으로 배치
-    for g in reversed(f_ord):
+    # 리스트를 정방향으로 만들고 아래에서 reversed 옵션을 적용합니다.
+    for g in f_ord:
         if g != '가정용':
-            # 각 용도 내에서도 당초계획이 상단, 예상실적이 하단에 나오게 하려면 예상실적을 리스트 앞에 배치
-            y_orders.extend([f"{g} (예상실적)", f"{g} (당초계획)"])
+            y_orders.extend([f"{g} (당초계획)", f"{g} (예상실적)"])
             
     fig_others = px.bar(df_others, x='값', y='y_label', color='기간', orientation='h', text_auto=',.0f',
                         category_orders={"y_label": y_orders, "기간": period_orders},
@@ -549,6 +549,8 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     
     fig_height = max(300, len(y_orders) * 35) 
     fig_others.update_layout(barmode='stack', yaxis_title="", height=fig_height, margin=dict(t=30, b=30))
+    # 🔥 여기도 동일하게 Y축 역순 옵션 추가!
+    fig_others.update_yaxes(autorange="reversed")
     st.plotly_chart(fig_others, use_container_width=True)
 
 
