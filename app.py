@@ -474,7 +474,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except: 
         styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
+    # 🔥 그룹(1번째 열) 세로 테두리 추가 적용 완료
     styles = [
+        {'selector': 'th:nth-child(1), td:nth-child(1)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(4), td:nth-child(4)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(7), td:nth-child(7)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(10), td:nth-child(10)', 'props': [('border-right', '3px solid #333333')]},
@@ -486,13 +488,13 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except:
         html_str = styled_df.render()
         
-    # 🔥 외곽선 테두리 'ㅁ' 모양을 위해 table 자체에 border 속성(3px solid #333333) 추가
+    # 🔥 전체 테두리 및 헤더 가로 테두리 적용 완료
     custom_css = """
     <style>
         .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
-        .custom-summary-table th { background-color: #f8f9fa; text-align: center; font-weight: bold; }
-        .custom-summary-table th:first-child, .custom-summary-table td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
+        .custom-summary-table thead th { background-color: #f8f9fa; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; }
+        .custom-summary-table tbody th { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
     </style>
     """
     st.markdown(f'<div class="custom-summary-table">{html_str}</div>', unsafe_allow_html=True)
