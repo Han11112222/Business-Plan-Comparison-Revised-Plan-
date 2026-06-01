@@ -456,6 +456,11 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         '증감_1~3월', '증감_4~12월', '증감_합계', '달성률(%)'
     ]
     df_display = df_summary[table_cols].copy()
+    
+    # 🔥 '그룹' 인덱스를 '비고' 컬럼으로 빼내고 이름 변경
+    df_display = df_display.reset_index()
+    df_display.rename(columns={'그룹': '비고', 'index': '비고'}, inplace=True)
+    
     format_dict = {c: "{:,.0f}" for c in table_cols if c != '달성률(%)'}
     format_dict['달성률(%)'] = "{:,.1f}%"
     
@@ -465,16 +470,17 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         else: return 'background-color: #ffe6e6; color: #cc0000;'
 
     def bold_total_row(row):
-        if row.name == '총계':
+        if row['비고'] == '총계':
             return ['font-weight: bold; background-color: #f8f9fa;'] * len(row)
         return [''] * len(row)
 
     try: 
-        styled_df = df_display.style.map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
+        styled_df = df_display.style.hide(axis='index').map(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     except: 
-        styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
+        styled_df = df_display.style.hide_index().applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
     styles = [
+        {'selector': 'th:nth-child(1), td:nth-child(1)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(4), td:nth-child(4)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(7), td:nth-child(7)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(10), td:nth-child(10)', 'props': [('border-right', '3px solid #333333')]},
@@ -486,13 +492,12 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except:
         html_str = styled_df.render()
         
-    # 🔥 외곽선 테두리 'ㅁ' 모양을 위해 table 자체에 border 속성(3px solid #333333) 추가
     custom_css = """
     <style>
         .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
-        .custom-summary-table th { background-color: #f8f9fa; text-align: center; font-weight: bold; }
-        .custom-summary-table th:first-child, .custom-summary-table td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
+        .custom-summary-table thead th { background-color: #f8f9fa; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; }
+        .custom-summary-table tbody td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
     </style>
     """
     st.markdown(f'<div class="custom-summary-table">{html_str}</div>', unsafe_allow_html=True)
