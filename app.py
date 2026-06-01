@@ -474,7 +474,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except: 
         styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
-    # 🔥 추가된 부분: 세로로 진한 선(border-right) 추가
     styles = [
         {'selector': 'th:nth-child(4), td:nth-child(4)', 'props': [('border-right', '3px solid #333333')]},
         {'selector': 'th:nth-child(7), td:nth-child(7)', 'props': [('border-right', '3px solid #333333')]},
@@ -482,15 +481,15 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     ]
     styled_df = styled_df.set_table_styles(styles, overwrite=False)
     
-    # Streamlit 기본 dataframe 대신 HTML로 렌더링하여 CSS 구분선을 강제 적용
     try:
         html_str = styled_df.to_html()
     except:
         html_str = styled_df.render()
         
+    # 🔥 외곽선 테두리 'ㅁ' 모양을 위해 table 자체에 border 속성(3px solid #333333) 추가
     custom_css = """
     <style>
-        .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; }
+        .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
         .custom-summary-table th { background-color: #f8f9fa; text-align: center; font-weight: bold; }
         .custom-summary-table th:first-child, .custom-summary-table td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
