@@ -474,12 +474,34 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except: 
         styled_df = df_display.style.applymap(custom_heatmap, subset=['증감_1~3월', '증감_4~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
-    table_height = (len(df_display) + 2) * 35 
-    st.dataframe(styled_df, use_container_width=True, height=table_height)
+    # 🔥 추가된 부분: 세로로 진한 선(border-right) 추가
+    styles = [
+        {'selector': 'th:nth-child(4), td:nth-child(4)', 'props': [('border-right', '3px solid #333333')]},
+        {'selector': 'th:nth-child(7), td:nth-child(7)', 'props': [('border-right', '3px solid #333333')]},
+        {'selector': 'th:nth-child(10), td:nth-child(10)', 'props': [('border-right', '3px solid #333333')]},
+    ]
+    styled_df = styled_df.set_table_styles(styles, overwrite=False)
+    
+    # Streamlit 기본 dataframe 대신 HTML로 렌더링하여 CSS 구분선을 강제 적용
+    try:
+        html_str = styled_df.to_html()
+    except:
+        html_str = styled_df.render()
+        
+    custom_css = """
+    <style>
+        .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; }
+        .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
+        .custom-summary-table th { background-color: #f8f9fa; text-align: center; font-weight: bold; }
+        .custom-summary-table th:first-child, .custom-summary-table td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
+    </style>
+    """
+    st.markdown(f'<div class="custom-summary-table">{html_str}</div>', unsafe_allow_html=True)
+    st.markdown(custom_css, unsafe_allow_html=True)
     st.markdown("---")
     
     # ==========================================
-    # 💡 4. 계획대비 예상실적 (단위 위치 및 마진 수정본)
+    # 💡 4. 계획대비 예상실적 
     # ==========================================
     st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
@@ -544,7 +566,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         max_val = max(df_data['계획'].max(), df_data['실적'].max())
         if max_val == 0: max_val = 1
         
-        # 🔥 단위 텍스트 y값을 1.05로 맞추고 yanchor 설정하여 상단 여백 보호
         fig.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", yanchor="bottom", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
         
         calculated_height = len(df_data) * 70 + 80 
@@ -554,7 +575,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
             height=calculated_height,
             xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="", range=[0, max_val * 1.15]),
             yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
-            # 🔥 상단 여백(t)을 60으로 늘려 글자 잘림 방지
             margin=dict(l=150, r=140, t=60, b=20),
             showlegend=show_legend,
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0) if show_legend else None
