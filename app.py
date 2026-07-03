@@ -160,7 +160,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                                  color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_bar.update_traces(textfont_size=18)
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
-                fig_bar.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+                fig_bar.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
                 st.plotly_chart(fig_bar, use_container_width=True)
                 
             with col_line:
@@ -169,7 +169,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                                    color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_line.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
                 fig_line.update_layout(title=f"2026년 {title_suffix} 월별 추이")
-                fig_line.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+                fig_line.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
                 st.plotly_chart(fig_line, use_container_width=True)
             
             st.markdown("##### 📋 세부 수치")
@@ -265,7 +265,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                        category_orders={"연_구분": filtered_x_labels_1},
                        color_discrete_map=color_map)
         fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        fig1.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+        fig1.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
         st.plotly_chart(fig1, use_container_width=True)
             
         st.markdown("#### 🧱 연도/구분별 용도 구성비")
@@ -289,7 +289,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 font=dict(size=14, color="blue")
             )
             
-        fig2.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+        fig2.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
         st.plotly_chart(fig2, use_container_width=True)
             
         st.markdown("##### 📋 전체량 상세 수치")
@@ -330,7 +330,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                        color_discrete_map=color_map)
         
         fig3.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        fig3.add_annotation(x=1, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"))
+        fig3.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
         st.plotly_chart(fig3, use_container_width=True)
         
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
@@ -361,7 +361,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     a2026 = apply_unit(a2026)
 
     def agg_data(df, prefix):
-        # 🔥 수정: '1~6월 실적', '7~12월 계획' 명칭 변경
         df['기간'] = df['월'].apply(lambda x: '1~6월 실적' if x <= 6 else '7~12월 계획')
         
         pivot = df.pivot_table(index='그룹', columns='기간', values='값', aggfunc='sum').fillna(0)
@@ -387,7 +386,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 
     df_summary.loc['총계'] = df_summary.sum()
 
-    # 🔥 수정: 컬럼 명칭 변경 연동
     df_summary['증감_1~6월 실적'] = df_summary['변경_1~6월 실적'] - df_summary['당초_1~6월 실적']
     df_summary['증감_7~12월 계획'] = df_summary['변경_7~12월 계획'] - df_summary['당초_7~12월 계획']
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
@@ -415,9 +413,10 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     rate_tot = (act_tot / plan_tot * 100) if plan_tot != 0 else 0
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f}")
-    col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f}")
-    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f}", delta=f"{diff_tot:,.0f}", delta_color="normal")
+    # 🔥 수정: 핵심 지표(KPI) 숫자 뒤에 단위 텍스트 추가
+    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f} {unit}")
+    col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f} {unit}")
+    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f} {unit}", delta=f"{diff_tot:,.0f} {unit}", delta_color="normal")
     col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
     st.markdown("---")
         
@@ -444,11 +443,16 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         running_vals.append(current_val)
     running_vals.append(act_val_wf)
     
+    # 🔥 수정: 폭포수 차트 높이 조정 (변동폭이 그래프 높이의 절반 정도 되도록 위아래 padding(여백) 계산)
     y_min, y_max = min(running_vals), max(running_vals)
-    padding = max(y_max * 0.02, 1)
+    diff = y_max - y_min if y_max != y_min else y_max * 0.1
+    padding = diff * 0.5 # 변동폭의 50%만큼 상하 여백을 추가하여 스케일 확보
     
-    fig_wf.update_layout(title=f"당초 계획 대비 용도별 증감 브릿지 ({wf_period})", margin=dict(t=40, b=40))
-    fig_wf.update_yaxes(range=[y_min - padding, y_max + padding]) 
+    fig_wf.update_layout(title=f"당초 계획 대비 용도별 증감 브릿지 ({wf_period})", margin=dict(t=60, b=40))
+    fig_wf.update_yaxes(range=[max(0, y_min - padding), y_max + padding]) 
+    
+    # 🔥 수정: 폭포수 차트 우측 상단 단위 추가
+    fig_wf.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
     
     st.plotly_chart(fig_wf, use_container_width=True)
     st.markdown("---")
@@ -491,37 +495,27 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except:
         html_str = styled_df.render()
         
-    # 🔥 수정: 테이블 4면 외곽 테두리를 모두 진한 굵기(3px solid #333333)로 명확하게 표시
     custom_css = """
     <style>
         .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
         
-        /* 4면 외곽선 적용 보완 (좌/우 가장자리 셀에 외곽선 굵게 적용) */
         .custom-summary-table th:first-child, .custom-summary-table td:first-child { border-left: 3px solid #333333 !important; }
         .custom-summary-table th:last-child, .custom-summary-table td:last-child { border-right: 3px solid #333333 !important; }
 
-        /* 헤더 행 (비고 가로행) */
         .custom-summary-table thead th { background-color: #2c3e50 !important; color: #ffffff !important; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; border-left: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; }
-        /* 헤더 행 첫번째 칸(비고) 오른쪽 굵은 흰색선, 왼쪽 외곽선 3px 검정 유지 */
         .custom-summary-table thead th:first-child { border-right: 3px solid #ffffff !important; border-left: 3px solid #333333 !important; }
-        /* 헤더 마지막 칸 오른쪽 외곽선 3px 검정 유지 */
         .custom-summary-table thead th:last-child { border-right: 3px solid #333333 !important; }
         
-        /* 바디 첫번째 열 (비고 세로열) */
         .custom-summary-table tbody td:first-child { background-color: #f8f9fa; text-align: center !important; font-weight: bold !important; border-left: 3px solid #333333 !important;}
         
-        /* 일반 행들의 세로 구분선 (검은색 굵게) */
         .custom-summary-table tbody tr:not(:last-child) td:nth-child(1) { border-right: 3px solid #333333 !important; }
         .custom-summary-table tbody tr:not(:last-child) td:nth-child(4) { border-right: 3px solid #333333 !important; }
         .custom-summary-table tbody tr:not(:last-child) td:nth-child(7) { border-right: 3px solid #333333 !important; }
         .custom-summary-table tbody tr:not(:last-child) td:nth-child(10) { border-right: 3px solid #333333 !important; }
         
-        /* 총계 행 (마지막 가로행) */
         .custom-summary-table tbody tr:last-child td { border-left: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; }
-        /* 총계 행 첫번째 칸(총계) 오른쪽 굵은 흰색선, 왼쪽 외곽선 3px 검정 유지 */
         .custom-summary-table tbody tr:last-child td:first-child { border-right: 3px solid #ffffff !important; border-left: 3px solid #333333 !important; }
-        /* 총계 마지막 칸 오른쪽 외곽선 3px 검정 유지 */
         .custom-summary-table tbody tr:last-child td:last-child { border-right: 3px solid #333333 !important; }
     </style>
     """
