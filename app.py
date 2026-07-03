@@ -413,7 +413,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     rate_tot = (act_tot / plan_tot * 100) if plan_tot != 0 else 0
 
     col1, col2, col3, col4 = st.columns(4)
-    # 🔥 수정: 핵심 지표(KPI) 숫자 뒤에 단위 텍스트 추가
     col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f} {unit}")
     col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f} {unit}")
     col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f} {unit}", delta=f"{diff_tot:,.0f} {unit}", delta_color="normal")
@@ -443,15 +442,16 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         running_vals.append(current_val)
     running_vals.append(act_val_wf)
     
-    # 🔥 수정: 폭포수 차트 높이 조정 (변동폭이 그래프 높이의 절반 정도 되도록 위아래 padding(여백) 계산)
     y_min, y_max = min(running_vals), max(running_vals)
     diff = y_max - y_min if y_max != y_min else y_max * 0.1
-    padding = diff * 0.5 # 변동폭의 50%만큼 상하 여백을 추가하여 스케일 확보
+    
+    # 🔥 수정: Y축 여백(padding)을 늘려 시각적으로 갭이 차트 높이의 약 1/3 크기로 보이도록 설정
+    # 원래 갭(diff)이 총 높이의 1/3을 차지하려면 위와 아래에 각각 diff 크기만큼의 여백을 줌 (총 3 * diff 범위)
+    padding = diff * 1.0 
     
     fig_wf.update_layout(title=f"당초 계획 대비 용도별 증감 브릿지 ({wf_period})", margin=dict(t=60, b=40))
     fig_wf.update_yaxes(range=[max(0, y_min - padding), y_max + padding]) 
     
-    # 🔥 수정: 폭포수 차트 우측 상단 단위 추가
     fig_wf.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
     
     st.plotly_chart(fig_wf, use_container_width=True)
