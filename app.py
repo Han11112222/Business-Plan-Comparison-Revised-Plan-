@@ -391,25 +391,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
     df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
 
-    st.markdown("#### 📈 핵심내용")
-    plan_tot = df_summary.loc['총계', '당초_합계']
-    act_tot = df_summary.loc['총계', '변경_합계']
-    diff_tot = df_summary.loc['총계', '증감_합계']
-    rate_tot = df_summary.loc['총계', '달성률(%)']
-
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f}")
-    col2.metric("② 변경(예상) 총계", f"{act_tot:,.0f}")
-    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f}", delta=f"{diff_tot:,.0f}", delta_color="normal")
-    col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
-    st.markdown("---")
 
     # ==========================================
-    # 💡 2. 폭포수 차트
+    # 💡 1. 핵심 지표 & 2. 폭포수 차트
     # ==========================================
-    st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
+    st.markdown("#### 🌊 핵심 지표 및 용도별 증감 요인 폭포수 차트")
     
-    wf_period = st.radio("조회 기간 선택 (폭포수 차트)", ["연간", "1~6월", "7~12월"], horizontal=True, key="wf_period_new")
+    # 🔥 수정: 핵심 지표와 폭포수 차트의 기간을 동기화하여 연동 (상단 배치)
+    wf_period = st.radio("조회 기간 선택 (핵심 지표 및 폭포수 차트)", ["연간", "1~6월", "7~12월"], horizontal=True, key="wf_period_new")
     
     if wf_period == "연간":
         col_plan_wf, col_act_wf, col_diff_wf = '당초_합계', '변경_합계', '증감_합계'
@@ -417,6 +406,20 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         col_plan_wf, col_act_wf, col_diff_wf = '당초_1~6월', '변경_1~6월', '증감_1~6월'
     else: 
         col_plan_wf, col_act_wf, col_diff_wf = '당초_7~12월', '변경_7~12월', '증감_7~12월'
+
+    # 동적 지표 계산
+    plan_tot = df_summary.loc['총계', col_plan_wf]
+    act_tot = df_summary.loc['총계', col_act_wf]
+    diff_tot = df_summary.loc['총계', col_diff_wf]
+    rate_tot = (act_tot / plan_tot * 100) if plan_tot != 0 else 0
+
+    # 동적 지표 출력
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f}")
+    col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f}")
+    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f}", delta=f"{diff_tot:,.0f}", delta_color="normal")
+    col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
+    st.markdown("---")
         
     df_wf = df_summary.drop('총계')
     
@@ -473,7 +476,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         elif val > 0: return 'background-color: #e6f2ff; color: #0055a4;'
         else: return 'background-color: #ffe6e6; color: #cc0000;'
 
-    # 🔥 수정: 총계 라인 윗단 두꺼운선, 배경색 어두운톤 변경 및 흰색 글씨 적용
     def bold_total_row(row):
         if row['비고'] == '총계':
             return ['font-weight: bold !important; background-color: #343a40 !important; color: #ffffff !important; border-top: 3px solid #000000 !important;'] * len(row)
@@ -484,26 +486,35 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except: 
         styled_df = df_display.style.hide_index().applymap(custom_heatmap, subset=['증감_1~6월', '증감_7~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
-    styles = [
-        {'selector': 'th:nth-child(1), td:nth-child(1)', 'props': [('border-right', '3px solid #333333')]},
-        {'selector': 'th:nth-child(4), td:nth-child(4)', 'props': [('border-right', '3px solid #333333')]},
-        {'selector': 'th:nth-child(7), td:nth-child(7)', 'props': [('border-right', '3px solid #333333')]},
-        {'selector': 'th:nth-child(10), td:nth-child(10)', 'props': [('border-right', '3px solid #333333')]},
-    ]
-    styled_df = styled_df.set_table_styles(styles, overwrite=False)
-    
     try:
         html_str = styled_df.to_html()
     except:
         html_str = styled_df.render()
         
-    # 🔥 수정: CSS 수정 (헤더 어두운 파란색 계열 배경+흰색 글씨 하이라이트)
+    # 🔥 수정: CSS 수정 (헤더행과 총계행의 세로줄을 흰색으로 처리, 첫번째칸 우측 굵은 흰색선 적용)
     custom_css = """
     <style>
         .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
-        .custom-summary-table thead th { background-color: #2c3e50 !important; color: #ffffff !important; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; }
+        
+        /* 헤더 행 (비고 가로행) */
+        .custom-summary-table thead th { background-color: #2c3e50 !important; color: #ffffff !important; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; border-left: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; }
+        /* 헤더 행 첫번째 칸(비고) 오른쪽 굵은 흰색선 */
+        .custom-summary-table thead th:first-child { border-right: 3px solid #ffffff !important; }
+        
+        /* 바디 첫번째 열 (비고 세로열) */
         .custom-summary-table tbody td:first-child { background-color: #f8f9fa; text-align: center !important; font-weight: bold !important; }
+        
+        /* 일반 행들의 세로 구분선 (검은색 굵게) */
+        .custom-summary-table tbody tr:not(:last-child) td:nth-child(1) { border-right: 3px solid #333333 !important; }
+        .custom-summary-table tbody tr:not(:last-child) td:nth-child(4) { border-right: 3px solid #333333 !important; }
+        .custom-summary-table tbody tr:not(:last-child) td:nth-child(7) { border-right: 3px solid #333333 !important; }
+        .custom-summary-table tbody tr:not(:last-child) td:nth-child(10) { border-right: 3px solid #333333 !important; }
+        
+        /* 총계 행 (마지막 가로행) */
+        .custom-summary-table tbody tr:last-child td { border-left: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; }
+        /* 총계 행 첫번째 칸(총계) 오른쪽 굵은 흰색선 */
+        .custom-summary-table tbody tr:last-child td:first-child { border-right: 3px solid #ffffff !important; }
     </style>
     """
     st.markdown(f'<div class="custom-summary-table">{html_str}</div>', unsafe_allow_html=True)
@@ -515,7 +526,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
-    period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~6월", "7~12월"], horizontal=True, key="period_sel_new")
+    period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~6월", "7~12월"], horizontal=True, key="period_sel_new_bottom")
     
     if period_sel == "연간":
         col_plan, col_act = '당초_합계', '변경_합계'
@@ -581,7 +592,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         
         calculated_height = len(df_data) * 70 + 80 
         
-        # 🔥 수정: margin l값을 고정(180)하고 automargin=False로 설정하여 상하 그래프간 시작 기준선(0지점) 완벽히 일치시킴
         fig.update_layout(
             barmode='overlay', 
             height=calculated_height,
