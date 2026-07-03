@@ -111,7 +111,9 @@ def make_long_data(df, label):
 # 🟢 4-1. 심플 대시보드 렌더링 (2. 세부내용)
 # ─────────────────────────────────────────────────────────
 def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_value=42.563):
-    st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({unit})")
+    short_unit = "GJ" if "GJ" in unit else "천m³"
+    
+    st.subheader(f"📊 공급량 실적 및 계획 통합 분석 ({short_unit})")
     
     st.markdown("### 1️⃣ 2026년 계획 vs 예상실적 비교")
     
@@ -160,7 +162,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                                  color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_bar.update_traces(textfont_size=18)
                 fig_bar.update_layout(title=f"2026년 {title_suffix} 연간 총합 비교", showlegend=False)
-                fig_bar.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
+                fig_bar.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
                 st.plotly_chart(fig_bar, use_container_width=True)
                 
             with col_line:
@@ -169,7 +171,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                                    color_discrete_map={"계획": "#1f77b4", "예상실적": "#ff7f0e"})
                 fig_line.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
                 fig_line.update_layout(title=f"2026년 {title_suffix} 월별 추이")
-                fig_line.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
+                fig_line.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
                 st.plotly_chart(fig_line, use_container_width=True)
             
             st.markdown("##### 📋 세부 수치")
@@ -265,7 +267,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                        category_orders={"연_구분": filtered_x_labels_1},
                        color_discrete_map=color_map)
         fig1.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        fig1.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
+        fig1.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
         st.plotly_chart(fig1, use_container_width=True)
             
         st.markdown("#### 🧱 연도/구분별 용도 구성비")
@@ -289,7 +291,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                 font=dict(size=14, color="blue")
             )
             
-        fig2.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
+        fig2.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
         st.plotly_chart(fig2, use_container_width=True)
             
         st.markdown("##### 📋 전체량 상세 수치")
@@ -330,7 +332,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
                        color_discrete_map=color_map)
         
         fig3.update_xaxes(tickvals=list(range(1, 13)), ticktext=[f"{i}월" for i in range(1, 13)])
-        fig3.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
+        fig3.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
         st.plotly_chart(fig3, use_container_width=True)
         
         st.markdown("##### 📋 용도별 상세 수치 (비교 테이블)")
@@ -344,6 +346,7 @@ def render_simple_dashboard(df, unit, long_plan=None, long_action=None, heating_
 # 🟢 4-2. One Page Review 렌더링 (1. One page review)
 # ─────────────────────────────────────────────────────────
 def render_one_page_review(long_plan, long_action, unit, heating_value):
+    short_unit = "GJ" if "GJ" in unit else "천m³"
     
     if long_plan.empty or long_action.empty:
         st.warning("데이터가 부족합니다. 공급량_사업계획 및 공급량_실천사업계획 데이터를 확인해주세요.")
@@ -413,9 +416,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     rate_tot = (act_tot / plan_tot * 100) if plan_tot != 0 else 0
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f} {unit}")
-    col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f} {unit}")
-    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f} {unit}", delta=f"{diff_tot:,.0f} {unit}", delta_color="normal")
+    col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f} {short_unit}")
+    col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f} {short_unit}")
+    col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f} {short_unit}", delta=f"{diff_tot:,.0f} {short_unit}", delta_color="normal")
     col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
     st.markdown("---")
         
@@ -444,15 +447,12 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     
     y_min, y_max = min(running_vals), max(running_vals)
     diff = y_max - y_min if y_max != y_min else y_max * 0.1
-    
-    # 🔥 수정: Y축 여백(padding)을 늘려 시각적으로 갭이 차트 높이의 약 1/3 크기로 보이도록 설정
-    # 원래 갭(diff)이 총 높이의 1/3을 차지하려면 위와 아래에 각각 diff 크기만큼의 여백을 줌 (총 3 * diff 범위)
     padding = diff * 1.0 
     
     fig_wf.update_layout(title=f"당초 계획 대비 용도별 증감 브릿지 ({wf_period})", margin=dict(t=60, b=40))
     fig_wf.update_yaxes(range=[max(0, y_min - padding), y_max + padding]) 
     
-    fig_wf.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
+    fig_wf.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right", yanchor="bottom")
     
     st.plotly_chart(fig_wf, use_container_width=True)
     st.markdown("---")
@@ -460,7 +460,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     # 💡 3. 스마트 요약 테이블 
     # ==========================================
-    st.markdown(f"#### 🚥 실천사업계획 요약 테이블 (단위: {unit})")
+    st.markdown(f"#### 🚥 실천사업계획 요약 테이블 (단위: {short_unit})")
     
     table_cols = [
         '당초_1~6월 실적', '당초_7~12월 계획', '당초_합계',
@@ -590,7 +590,7 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         max_val = max(df_data['계획'].max(), df_data['실적'].max())
         if max_val == 0: max_val = 1
         
-        fig.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", yanchor="bottom", text=f"단위: {unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
+        fig.add_annotation(x=1.0, y=1.05, xref="paper", yref="paper", yanchor="bottom", text=f"단위: {short_unit}", showarrow=False, font=dict(size=12, color="gray"), xanchor="right")
         
         calculated_height = len(df_data) * 70 + 80 
         
