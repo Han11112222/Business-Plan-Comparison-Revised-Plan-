@@ -361,14 +361,15 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     a2026 = apply_unit(a2026)
 
     def agg_data(df, prefix):
-        df['기간'] = df['월'].apply(lambda x: '1~6월' if x <= 6 else '7~12월')
+        # 🔥 수정: '1~6월 실적', '7~12월 계획' 명칭 변경
+        df['기간'] = df['월'].apply(lambda x: '1~6월 실적' if x <= 6 else '7~12월 계획')
         
         pivot = df.pivot_table(index='그룹', columns='기간', values='값', aggfunc='sum').fillna(0)
         
-        for col in ['1~6월', '7~12월']:
+        for col in ['1~6월 실적', '7~12월 계획']:
             if col not in pivot.columns: pivot[col] = 0
             
-        pivot['합계'] = pivot['1~6월'] + pivot['7~12월']
+        pivot['합계'] = pivot['1~6월 실적'] + pivot['7~12월 계획']
         
         pivot.columns = [f'{prefix}_{c}' for c in pivot.columns]
         return pivot
@@ -386,8 +387,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 
     df_summary.loc['총계'] = df_summary.sum()
 
-    df_summary['증감_1~6월'] = df_summary['변경_1~6월'] - df_summary['당초_1~6월']
-    df_summary['증감_7~12월'] = df_summary['변경_7~12월'] - df_summary['당초_7~12월']
+    # 🔥 수정: 컬럼 명칭 변경 연동
+    df_summary['증감_1~6월 실적'] = df_summary['변경_1~6월 실적'] - df_summary['당초_1~6월 실적']
+    df_summary['증감_7~12월 계획'] = df_summary['변경_7~12월 계획'] - df_summary['당초_7~12월 계획']
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
     df_summary['달성률(%)'] = (df_summary['변경_합계'] / df_summary['당초_합계'] * 100).fillna(0)
 
@@ -397,15 +399,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown("#### 🌊 핵심 지표 및 용도별 증감 요인 폭포수 차트")
     
-    # 🔥 수정: 핵심 지표와 폭포수 차트의 기간을 동기화하여 연동 (상단 배치)
-    wf_period = st.radio("조회 기간 선택 (핵심 지표 및 폭포수 차트)", ["연간", "1~6월", "7~12월"], horizontal=True, key="wf_period_new")
+    wf_period = st.radio("조회 기간 선택 (핵심 지표 및 폭포수 차트)", ["연간", "1~6월 실적", "7~12월 계획"], horizontal=True, key="wf_period_new")
     
     if wf_period == "연간":
         col_plan_wf, col_act_wf, col_diff_wf = '당초_합계', '변경_합계', '증감_합계'
-    elif wf_period == "1~6월":
-        col_plan_wf, col_act_wf, col_diff_wf = '당초_1~6월', '변경_1~6월', '증감_1~6월'
+    elif wf_period == "1~6월 실적":
+        col_plan_wf, col_act_wf, col_diff_wf = '당초_1~6월 실적', '변경_1~6월 실적', '증감_1~6월 실적'
     else: 
-        col_plan_wf, col_act_wf, col_diff_wf = '당초_7~12월', '변경_7~12월', '증감_7~12월'
+        col_plan_wf, col_act_wf, col_diff_wf = '당초_7~12월 계획', '변경_7~12월 계획', '증감_7~12월 계획'
 
     # 동적 지표 계산
     plan_tot = df_summary.loc['총계', col_plan_wf]
@@ -413,7 +414,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     diff_tot = df_summary.loc['총계', col_diff_wf]
     rate_tot = (act_tot / plan_tot * 100) if plan_tot != 0 else 0
 
-    # 동적 지표 출력
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("① 당초 계획 총계", f"{plan_tot:,.0f}")
     col2.metric("② 실적(예상) 총계", f"{act_tot:,.0f}")
@@ -459,9 +459,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     st.markdown(f"#### 🚥 실천사업계획 요약 테이블 (단위: {unit})")
     
     table_cols = [
-        '당초_1~6월', '당초_7~12월', '당초_합계',
-        '변경_1~6월', '변경_7~12월', '변경_합계',
-        '증감_1~6월', '증감_7~12월', '증감_합계', '달성률(%)'
+        '당초_1~6월 실적', '당초_7~12월 계획', '당초_합계',
+        '변경_1~6월 실적', '변경_7~12월 계획', '변경_합계',
+        '증감_1~6월 실적', '증감_7~12월 계획', '증감_합계', '달성률(%)'
     ]
     df_display = df_summary[table_cols].copy()
     
@@ -482,28 +482,34 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         return [''] * len(row)
 
     try: 
-        styled_df = df_display.style.hide(axis='index').map(custom_heatmap, subset=['증감_1~6월', '증감_7~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
+        styled_df = df_display.style.hide(axis='index').map(custom_heatmap, subset=['증감_1~6월 실적', '증감_7~12월 계획', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     except: 
-        styled_df = df_display.style.hide_index().applymap(custom_heatmap, subset=['증감_1~6월', '증감_7~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
+        styled_df = df_display.style.hide_index().applymap(custom_heatmap, subset=['증감_1~6월 실적', '증감_7~12월 계획', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
     try:
         html_str = styled_df.to_html()
     except:
         html_str = styled_df.render()
         
-    # 🔥 수정: CSS 수정 (헤더행과 총계행의 세로줄을 흰색으로 처리, 첫번째칸 우측 굵은 흰색선 적용)
+    # 🔥 수정: 테이블 4면 외곽 테두리를 모두 진한 굵기(3px solid #333333)로 명확하게 표시
     custom_css = """
     <style>
         .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
         
+        /* 4면 외곽선 적용 보완 (좌/우 가장자리 셀에 외곽선 굵게 적용) */
+        .custom-summary-table th:first-child, .custom-summary-table td:first-child { border-left: 3px solid #333333 !important; }
+        .custom-summary-table th:last-child, .custom-summary-table td:last-child { border-right: 3px solid #333333 !important; }
+
         /* 헤더 행 (비고 가로행) */
         .custom-summary-table thead th { background-color: #2c3e50 !important; color: #ffffff !important; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; border-left: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; }
-        /* 헤더 행 첫번째 칸(비고) 오른쪽 굵은 흰색선 */
-        .custom-summary-table thead th:first-child { border-right: 3px solid #ffffff !important; }
+        /* 헤더 행 첫번째 칸(비고) 오른쪽 굵은 흰색선, 왼쪽 외곽선 3px 검정 유지 */
+        .custom-summary-table thead th:first-child { border-right: 3px solid #ffffff !important; border-left: 3px solid #333333 !important; }
+        /* 헤더 마지막 칸 오른쪽 외곽선 3px 검정 유지 */
+        .custom-summary-table thead th:last-child { border-right: 3px solid #333333 !important; }
         
         /* 바디 첫번째 열 (비고 세로열) */
-        .custom-summary-table tbody td:first-child { background-color: #f8f9fa; text-align: center !important; font-weight: bold !important; }
+        .custom-summary-table tbody td:first-child { background-color: #f8f9fa; text-align: center !important; font-weight: bold !important; border-left: 3px solid #333333 !important;}
         
         /* 일반 행들의 세로 구분선 (검은색 굵게) */
         .custom-summary-table tbody tr:not(:last-child) td:nth-child(1) { border-right: 3px solid #333333 !important; }
@@ -513,8 +519,10 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         
         /* 총계 행 (마지막 가로행) */
         .custom-summary-table tbody tr:last-child td { border-left: 1px solid #ffffff !important; border-right: 1px solid #ffffff !important; }
-        /* 총계 행 첫번째 칸(총계) 오른쪽 굵은 흰색선 */
-        .custom-summary-table tbody tr:last-child td:first-child { border-right: 3px solid #ffffff !important; }
+        /* 총계 행 첫번째 칸(총계) 오른쪽 굵은 흰색선, 왼쪽 외곽선 3px 검정 유지 */
+        .custom-summary-table tbody tr:last-child td:first-child { border-right: 3px solid #ffffff !important; border-left: 3px solid #333333 !important; }
+        /* 총계 마지막 칸 오른쪽 외곽선 3px 검정 유지 */
+        .custom-summary-table tbody tr:last-child td:last-child { border-right: 3px solid #333333 !important; }
     </style>
     """
     st.markdown(f'<div class="custom-summary-table">{html_str}</div>', unsafe_allow_html=True)
@@ -526,14 +534,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
-    period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~6월", "7~12월"], horizontal=True, key="period_sel_new_bottom")
+    period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~6월 실적", "7~12월 계획"], horizontal=True, key="period_sel_new_bottom")
     
     if period_sel == "연간":
         col_plan, col_act = '당초_합계', '변경_합계'
-    elif period_sel == "1~6월":
-        col_plan, col_act = '당초_1~6월', '변경_1~6월'
+    elif period_sel == "1~6월 실적":
+        col_plan, col_act = '당초_1~6월 실적', '변경_1~6월 실적'
     else: 
-        col_plan, col_act = '당초_7~12월', '변경_7~12월'
+        col_plan, col_act = '당초_7~12월 계획', '변경_7~12월 계획'
         
     df_perf = df_summary[[col_plan, col_act]].copy()
     df_perf.columns = ['계획', '실적']
