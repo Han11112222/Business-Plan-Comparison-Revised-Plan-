@@ -28,7 +28,7 @@ MAPPING_SUPPLY = {
     "영업용": "영업용",
     "일반용(1)": "업무용", "일반용1": "업무용", "일반용1(영업)": "업무용", "일반용1(업무)": "업무용",
     "일반용(2)": "업무용", "일반용2": "업무용", 
-    "업무난방용": "업무용", "냉난방용": "업무용", "냉방용": "업무용",  # 🔥 업무난방용을 업무용으로 통합
+    "업무난방용": "업무용", "냉난방용": "업무용", "냉방용": "업무용", 
     "주한미군": "업무용", 
     "산업용": "산업용",
     "수송용(CNG)": "수송용", "CNG": "수송용",
@@ -40,7 +40,7 @@ MAPPING_SUPPLY = {
 }
 
 ORDER_LIST = [
-    "가정용", "영업용", "업무용", "산업용",  # 🔥 통합에 따라 업무난방용 제거
+    "가정용", "영업용", "업무용", "산업용",
     "열병합용", "연료전지", "자가열전용", "열전용설비용(주택외)", "수송용"
 ]
 
@@ -361,16 +361,13 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     a2026 = apply_unit(a2026)
 
     def agg_data(df, prefix):
-        # 🔥 수정: 기간 구분 기준을 3월에서 6월로 변경
         df['기간'] = df['월'].apply(lambda x: '1~6월' if x <= 6 else '7~12월')
         
         pivot = df.pivot_table(index='그룹', columns='기간', values='값', aggfunc='sum').fillna(0)
         
-        # 🔥 수정: 기간 컬럼명 변경
         for col in ['1~6월', '7~12월']:
             if col not in pivot.columns: pivot[col] = 0
             
-        # 🔥 수정: 합계 컬럼명 변경
         pivot['합계'] = pivot['1~6월'] + pivot['7~12월']
         
         pivot.columns = [f'{prefix}_{c}' for c in pivot.columns]
@@ -389,7 +386,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 
     df_summary.loc['총계'] = df_summary.sum()
 
-    # 🔥 수정: 기간 컬럼명 변경
     df_summary['증감_1~6월'] = df_summary['변경_1~6월'] - df_summary['당초_1~6월']
     df_summary['증감_7~12월'] = df_summary['변경_7~12월'] - df_summary['당초_7~12월']
     df_summary['증감_합계'] = df_summary['변경_합계'] - df_summary['당초_합계']
@@ -413,15 +409,13 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown("#### 🌊 용도별 증감 요인 폭포수 차트 (Waterfall)")
     
-    # 🔥 수정: 라디오 버튼 옵션 및 키 변경
     wf_period = st.radio("조회 기간 선택 (폭포수 차트)", ["연간", "1~6월", "7~12월"], horizontal=True, key="wf_period_new")
     
-    # 🔥 수정: 기간에 따른 변수명 매핑 변경
     if wf_period == "연간":
         col_plan_wf, col_act_wf, col_diff_wf = '당초_합계', '변경_합계', '증감_합계'
     elif wf_period == "1~6월":
         col_plan_wf, col_act_wf, col_diff_wf = '당초_1~6월', '변경_1~6월', '증감_1~6월'
-    else: # 7~12월
+    else: 
         col_plan_wf, col_act_wf, col_diff_wf = '당초_7~12월', '변경_7~12월', '증감_7~12월'
         
     df_wf = df_summary.drop('총계')
@@ -461,7 +455,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown(f"#### 🚥 실천사업계획 요약 테이블 (단위: {unit})")
     
-    # 🔥 수정: 기간 컬럼명 변경
     table_cols = [
         '당초_1~6월', '당초_7~12월', '당초_합계',
         '변경_1~6월', '변경_7~12월', '변경_합계',
@@ -480,16 +473,15 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         elif val > 0: return 'background-color: #e6f2ff; color: #0055a4;'
         else: return 'background-color: #ffe6e6; color: #cc0000;'
 
+    # 🔥 수정: 총계 라인 윗단 두꺼운선, 배경색 어두운톤 변경 및 흰색 글씨 적용
     def bold_total_row(row):
         if row['비고'] == '총계':
-            return ['font-weight: bold; background-color: #f8f9fa;'] * len(row)
+            return ['font-weight: bold !important; background-color: #343a40 !important; color: #ffffff !important; border-top: 3px solid #000000 !important;'] * len(row)
         return [''] * len(row)
 
     try: 
-        # 🔥 수정: 히트맵 적용 기간 컬럼명 변경
         styled_df = df_display.style.hide(axis='index').map(custom_heatmap, subset=['증감_1~6월', '증감_7~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     except: 
-        # 🔥 수정: 히트맵 적용 기간 컬럼명 변경
         styled_df = df_display.style.hide_index().applymap(custom_heatmap, subset=['증감_1~6월', '증감_7~12월', '증감_합계']).apply(bold_total_row, axis=1).format(format_dict)
     
     styles = [
@@ -505,12 +497,13 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     except:
         html_str = styled_df.render()
         
+    # 🔥 수정: CSS 수정 (헤더 어두운 파란색 계열 배경+흰색 글씨 하이라이트)
     custom_css = """
     <style>
         .custom-summary-table table { width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 14px; margin-bottom: 1rem; border: 3px solid #333333 !important; }
         .custom-summary-table th, .custom-summary-table td { border: 1px solid #e2e6ea; padding: 8px; text-align: right; color: #31333F; }
-        .custom-summary-table thead th { background-color: #f8f9fa; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; }
-        .custom-summary-table tbody td:first-child { background-color: #f8f9fa !important; text-align: center !important; font-weight: bold !important; }
+        .custom-summary-table thead th { background-color: #2c3e50 !important; color: #ffffff !important; text-align: center; font-weight: bold; border-bottom: 3px solid #333333 !important; }
+        .custom-summary-table tbody td:first-child { background-color: #f8f9fa; text-align: center !important; font-weight: bold !important; }
     </style>
     """
     st.markdown(f'<div class="custom-summary-table">{html_str}</div>', unsafe_allow_html=True)
@@ -522,15 +515,13 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     # ==========================================
     st.markdown(f"#### 🎯 당초계획 vs 예상실적 (기간별 세부 현황)")
     
-    # 🔥 수정: 라디오 버튼 옵션 및 키 변경
     period_sel = st.radio("조회 기간 선택 (세부 현황)", ["연간", "1~6월", "7~12월"], horizontal=True, key="period_sel_new")
     
-    # 🔥 수정: 기간에 따른 변수명 매핑 변경
     if period_sel == "연간":
         col_plan, col_act = '당초_합계', '변경_합계'
     elif period_sel == "1~6월":
         col_plan, col_act = '당초_1~6월', '변경_1~6월'
-    else: # 7~12월
+    else: 
         col_plan, col_act = '당초_7~12월', '변경_7~12월'
         
     df_perf = df_summary[[col_plan, col_act]].copy()
@@ -539,40 +530,11 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     df_perf['달성률'] = (df_perf['실적'] / df_perf['계획'] * 100).fillna(0)
     
     df_perf_total = df_perf.loc[['총계']]
-    
-    # 🔥 수정: 그래프 분류 변경 (가정용, 산업용 추가, 가정용 외 제거)
     df_perf_home = df_perf.loc[['가정용']] if '가정용' in df_perf.index else pd.DataFrame()
     df_perf_ind = df_perf.loc[['산업용']] if '산업용' in df_perf.index else pd.DataFrame()
     
-    # 🔥 수정: 산업용을 제외한 나머지 용도 마스크 (총계, 가정용, 산업용 제외)
     others_mask_for_total = ~df_perf.index.isin(['총계', '가정용', '산업용'])
     
-    if others_mask_for_total.any():
-        others_sum_for_total = df_perf.loc[others_mask_for_total, ['계획', '실적']].sum()
-        # 🔥 수정: 가정용 외 (합계) -> 기타로 변경
-        others_row_for_total = pd.DataFrame([others_sum_for_total], index=['기타'])
-        others_row_for_total['차이'] = others_row_for_total['실적'] - others_row_for_total['계획']
-        others_row_for_total['달성률'] = (others_row_for_total['실적'] / others_row_for_total['계획'] * 100).fillna(0)
-    else:
-        others_row_for_total = pd.DataFrame()
-
-    # part1_df 구성: 총계, 가정용, 산업용, 기타 순서 (iloc[::-1]로 뒤집어 그래프 그리기)
-    # 최종 그릴 순서: 총계(맨위) -> 가정용 -> 산업용 -> 기타(맨아래)
-    # part1_df 구성: 기타 -> 산업용 -> 가정용 -> 총계 순서 (이렇게 만들면 iloc[::-1] 없이 graph_objects가 밑에서부터 그린다.)
-    
-    # graph_objects.Figure(go.Bar(..., y=df_data.index, ...))는 y축의 인덱스를 아래에서부터 위로 그린다.
-    # 따라서 part1_df를 구성할 때 기타 -> 산업용 -> 가정용 -> 총계 순서로 만들면 그래프는 총계(맨위) -> 가정용 -> 산업용 -> 기타(맨아래) 순서로 그려진다.
-    
-    # 사용자의 의도를 다시 해석해보자: "그라애 세부용도는 기타 용도를 나타내면 좋겠어." -> "그래프의 세부 용도는 '기타' 용도로 표시하면 좋겠어." 
-    # 즉, 기존의 '가정용 외 (합계)'를 '기타'로 바꾸고, '산업용'을 독립적으로 추가하라는 것이다.
-    # 세부 용도 그래프 (part2_df)는 '기타'에 해당하는 용도들을 하나씩 보여주는 것이었다. 사용자가 이것을 '기타'라는 하나의 바로 묶어서 '요약' 그래프 (part1_df)에 포함시키고, 세부 용도 그래프는 '기타'에 해당하는 용도들을 보여주는 것으로 유지하는 것이 맞을 것 같다. 
-    
-    # 수정된 계획:
-    # 1. '요약' 그래프 (part1_df): 총계, 가정용, 산업용, 기타 (기존 가정용 외 합계 -> 산업용 제외 나머지 합계로 수정 및 이름 변경)
-    # 2. '세부용도' 그래프 (part2_df): '기타'에 해당하는 용도들을 하나씩 보여줌. 
-    
-    # '기타' 계산 로직: 가정용, 산업용, 총계를 제외한 나머지
-    others_mask_for_total = ~df_perf.index.isin(['총계', '가정용', '산업용'])
     if others_mask_for_total.any():
         others_sum_for_total = df_perf.loc[others_mask_for_total, ['계획', '실적']].sum()
         others_row_for_total = pd.DataFrame([others_sum_for_total], index=['기타'])
@@ -580,13 +542,11 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         others_row_for_total['달성률'] = (others_row_for_total['실적'] / others_row_for_total['계획'] * 100).fillna(0)
     else:
         others_row_for_total = pd.DataFrame()
-        
-    # '요약' 그래프 (part1_df) 구성: 기타 -> 산업용 -> 가정용 -> 총계 순서
+
     part1_df = pd.concat([others_row_for_total, df_perf_ind, df_perf_home, df_perf_total])
 
-    # '세부용도' 그래프 (part2_df) 구성: 가정용, 산업용, 총계를 제외한 나머지 용도들의 행 (순서 유지)
     part2_df = df_perf.loc[others_mask_for_total]
-    part2_df = part2_df.iloc[::-1] # 순서 뒤집기 (밑에서부터 그리기 위해)
+    part2_df = part2_df.iloc[::-1] 
     
     def draw_bullet_chart(df_data, show_legend=False):
         fig = go.Figure()
@@ -614,8 +574,6 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
                 showarrow=False, xanchor="left", align="left"
             )
             
-        # 🔥 수정: max_val 계산 로직 수정 (최대값 찾기)
-        # df_data['계획'].max(), df_data['실적'].max()
         max_val = max(df_data['계획'].max(), df_data['실적'].max())
         if max_val == 0: max_val = 1
         
@@ -623,28 +581,24 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
         
         calculated_height = len(df_data) * 70 + 80 
         
+        # 🔥 수정: margin l값을 고정(180)하고 automargin=False로 설정하여 상하 그래프간 시작 기준선(0지점) 완벽히 일치시킴
         fig.update_layout(
             barmode='overlay', 
             height=calculated_height,
             xaxis=dict(showgrid=True, gridcolor='#f0f0f0', title="", range=[0, max_val * 1.15]),
-            yaxis=dict(title="", tickfont=dict(size=14, weight="bold")),
-            margin=dict(l=150, r=140, t=60, b=20),
+            yaxis=dict(title="", tickfont=dict(size=14, weight="bold"), automargin=False), 
+            margin=dict(l=180, r=140, t=60, b=20),
             showlegend=show_legend,
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0) if show_legend else None
         )
         return fig
 
-    # 🔥 수정: '요약' 그래프 제목 변경
     st.markdown("##### 📌 [요약 (분류 변경)]")
-    # part1_df를 기타 -> 산업용 -> 가정용 -> 총계 순서로 만들었으므로 graph_objects는 아래에서부터 위로 그린다.
-    # iloc[::-1] 없이 그대로 사용.
     fig_part1 = draw_bullet_chart(part1_df, show_legend=True)
     st.plotly_chart(fig_part1, use_container_width=True)
 
     if not part2_df.empty:
-        # 🔥 수정: '세부용도' 그래프 제목 변경
         st.markdown("##### 📌 [세부용도 (기타 용도 나타냄)]")
-        # part2_df는 산업용, 가정용, 총계를 제외한 나머지로 구성하고, iloc[::-1]로 뒤집어 아래에서부터 그린다.
         fig_part2 = draw_bullet_chart(part2_df, show_legend=False)
         st.plotly_chart(fig_part2, use_container_width=True)
 
