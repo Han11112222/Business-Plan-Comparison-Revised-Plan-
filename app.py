@@ -560,11 +560,9 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 
     part1_df = pd.concat([others_row_for_total, df_perf_ind, df_perf_home, df_perf_total])
 
-    # ── 불릿 차트 part2: ORDER_LIST 순서 강제 적용 ──
+    # ── 불릿 차트 part2: 실적값 기준 오름차순(차트는 아래→위이므로 내림차순 표시) ──
     part2_df = df_perf.loc[others_mask_for_total]
-    valid_part2_order = [g for g in ORDER_LIST if g in part2_df.index]
-    rest_part2 = [g for g in part2_df.index if g not in valid_part2_order]
-    part2_df = part2_df.reindex(valid_part2_order + rest_part2)
+    part2_df = part2_df.sort_values('실적', ascending=True)
     # ─────────────────────────────────────────────────
 
     def draw_bullet_chart(df_data, show_legend=False):
