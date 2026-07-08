@@ -421,9 +421,14 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
     col3.metric("③ 총 증감량 (②-①)", f"{diff_tot:,.0f} {short_unit}", delta=f"{diff_tot:,.0f} {short_unit}", delta_color="normal")
     col4.metric("④ 총 달성률", f"{rate_tot:,.1f}%")
     st.markdown("---")
-        
+
+    # ── 폭포수 차트: ORDER_LIST 순서 적용 ──────────────────
     df_wf = df_summary.drop('총계')
-    
+    valid_wf_order = [g for g in ORDER_LIST if g in df_wf.index]
+    rest_wf = [g for g in df_wf.index if g not in valid_wf_order]
+    df_wf = df_wf.reindex(valid_wf_order + rest_wf)
+    # ────────────────────────────────────────────────────────
+        
     plan_val_wf = df_summary.loc['총계', col_plan_wf]
     act_val_wf = df_summary.loc['총계', col_act_wf]
     
@@ -558,8 +563,12 @@ def render_one_page_review(long_plan, long_action, unit, heating_value):
 
     part1_df = pd.concat([others_row_for_total, df_perf_ind, df_perf_home, df_perf_total])
 
+    # ── 불릿 차트 part2: ORDER_LIST 순서 적용 ──────────────
     part2_df = df_perf.loc[others_mask_for_total]
-    part2_df = part2_df.iloc[::-1] 
+    valid_part2_order = [g for g in ORDER_LIST if g in part2_df.index]
+    rest_part2 = [g for g in part2_df.index if g not in valid_part2_order]
+    part2_df = part2_df.reindex(valid_part2_order + rest_part2)
+    # ────────────────────────────────────────────────────────
     
     def draw_bullet_chart(df_data, show_legend=False):
         fig = go.Figure()
